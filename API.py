@@ -6,18 +6,14 @@ import datetime
 from datetime import timedelta
 from flask import Flask, request, jsonify
 import time
-import threading
-import requests
 
 load_dotenv()
 
 app = Flask(__name__)
 
-
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
 if not SUPER_PASSWORD or len(SUPER_PASSWORD) != 500:
     raise Exception("A variável de ambiente GEN_PASSWORD deve estar definida com exatamente 500 caracteres.")
-
 
 keys_data = {}
 
@@ -29,13 +25,17 @@ def generate_key():
         groups.append(group)
     return '-'.join(groups)
 
-@app.route('/gerar', methods=['POST'])
-def gerar():
+@app.route('/gerar/<int:quantidade>', methods=['POST'])
+def gerar_multiplo(quantidade):
     """
-    Endpoint protegido que gera uma nova chave.
+    Endpoint protegido que gera múltiplas chaves de uma vez.
+    O número de chaves geradas é especificado na URL (1 a 300).
     É necessário enviar no cabeçalho 'X-Gen-Password' a senha secreta de 500 caracteres.
     O JSON de entrada deve conter o campo "tipo" com valor "Uso Único" ou "LifeTime".
     """
+    
+    if quantidade < 1 or quantidade > 300:
+        return jsonify({"error": "Quantidade deve ser entre 1 e 300."}), 400
     
     provided_password = request.headers.get("X-Gen-Password", "")
     if provided_password != SUPER_PASSWORD:
@@ -49,22 +49,24 @@ def gerar():
     if tipo not in ["Uso Único", "LifeTime"]:
         return jsonify({"error": "Tipo inválido. Deve ser 'Uso Único' ou 'LifeTime'."}), 400
 
-    chave = generate_key()
+    chaves_geradas = []
     now = datetime.datetime.now()
-    
-    expire_at = now + timedelta(hours=6)
-    keys_data[chave] = {
-        "tipo": tipo,
-        "generated": now.isoformat(),
-        "expire_at": expire_at.isoformat(),
-        "used": False
-    }
+    for _ in range(quantidade):
+        chave = generate_key()
+        expire_at = now + timedelta(hours=6)
+        keys_data[chave] = {
+            "tipo": tipo,
+            "generated": now.isoformat(),
+            "expire_at": expire_at.isoformat(),
+            "used": False
+        }
+        chaves_geradas.append({
+            "chave": chave,
+            "tipo": tipo,
+            "expire_at": expire_at.isoformat()
+        })
 
-    return jsonify({
-        "chave": chave,
-        "tipo": tipo,
-        "expire_at": expire_at.isoformat()
-    }), 200
+    return jsonify({"chaves": chaves_geradas}), 200
 
 @app.route('/validate', methods=['POST'])
 def validate():
@@ -107,36 +109,6 @@ def validate():
 @app.route('/', methods=['GET'])
 def index():
     return jsonify({"message": "API de chaves rodando."})
-
-
-def send_activity_request():
-    try:
-        response = requests.post("https://four3nuihgv7834hgv783h8fvhn2847nrv8h3hn7-bgn5.onrender.com/atividade")
-        print("Requisição de atividade enviada.")
-    except Exception as e:
-        print(f"Erro ao enviar requisição de atividade: {e}")
-
-
-def random_time_interval():
-    
-    base_time = random.randint(60, 890)
-    
-    if random.random() < 0.85:
-        base_time = random.randint(360, 890)
-    return base_time
-
-
-def activity_loop():
-    while True:
-        
-        wait_time = random_time_interval()
-        print(f"Aguardando {wait_time} segundos antes de enviar a próxima requisição...")
-        time.sleep(wait_time)
-        send_activity_request()
-
-thread = threading.Thread(target=activity_loop)
-thread.daemon = True
-thread.start()
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0")
