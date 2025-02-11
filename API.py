@@ -9,17 +9,14 @@ import requests
 import threading
 import time
 
-# Carrega as variáveis do arquivo .env
 load_dotenv()
 
 app = Flask(__name__)
 
-# A senha secreta para geração de chaves é obtida do .env
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
 if not SUPER_PASSWORD or len(SUPER_PASSWORD) != 500:
     raise Exception("A variável de ambiente GEN_PASSWORD deve estar definida com exatamente 500 caracteres.")
 
-# Armazenamento em memória para as chaves geradas
 keys_data = {}
 
 def generate_key():
@@ -37,7 +34,7 @@ def gerar():
     É necessário enviar no cabeçalho 'X-Gen-Password' a senha secreta de 500 caracteres.
     O JSON de entrada deve conter o campo "tipo" com valor "Uso Único" ou "LifeTime".
     """
-    # Verifica se o token secreto está correto
+    
     provided_password = request.headers.get("X-Gen-Password", "")
     if provided_password != SUPER_PASSWORD:
         return jsonify({"error": "Acesso não autorizado"}), 401
@@ -52,13 +49,13 @@ def gerar():
 
     chave = generate_key()
     now = datetime.datetime.now()
-    # Define a expiração em 6 horas a partir da geração
+
     expire_at = now + timedelta(hours=6)
     keys_data[chave] = {
         "tipo": tipo,
         "generated": now.isoformat(),
         "expire_at": expire_at.isoformat(),
-        "used": False  # Só relevante para "Uso Único"
+        "used": False
     }
 
     return jsonify({
@@ -118,12 +115,12 @@ def keep_alive():
     """Função para enviar uma requisição POST para o próprio servidor a cada 10 minutos."""
     while True:
         try:
-            requests.post("https://four3nuihgv7834hgv783h8fvhn2847nrv8h3hn7-bgn5.onrender.com/atividade")  # Envia a requisição para manter a instância ativa
+            requests.post("https://four3nuihgv7834hgv783h8fvhn2847nrv8h3hn7-bgn5.onrender.com/atividade")
         except requests.exceptions.RequestException as e:
             print(f"Erro ao enviar requisição de atividade: {e}")
-        time.sleep(600)  # Aguarda 10 minutos antes de enviar a próxima requisição
+        time.sleep(600)
 
 if __name__ == '__main__':
-    # Inicia um thread para manter a instância ativa
+    
     threading.Thread(target=keep_alive, daemon=True).start()
     app.run(host="0.0.0.0")
