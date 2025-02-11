@@ -5,6 +5,9 @@ import string
 import datetime
 from datetime import timedelta
 from flask import Flask, request, jsonify
+import requests
+import threading
+import time
 
 # Carrega as variáveis do arquivo .env
 load_dotenv()
@@ -102,9 +105,25 @@ def validate():
         "message": "Chave validada com sucesso."
     }), 200
 
+@app.route('/atividade', methods=['POST'])
+def atividade():
+    """Endpoint para enviar uma requisição POST para manter a instância ativa."""
+    return jsonify({"message": "Atividade registrada."}), 200
+
 @app.route('/', methods=['GET'])
 def index():
     return jsonify({"message": "API de chaves rodando."})
 
+def keep_alive():
+    """Função para enviar uma requisição POST para o próprio servidor a cada 10 minutos."""
+    while True:
+        try:
+            requests.post("https://four3nuihgv7834hgv783h8fvhn2847nrv8h3hn7-bgn5.onrender.com/atividade")  # Envia a requisição para manter a instância ativa
+        except requests.exceptions.RequestException as e:
+            print(f"Erro ao enviar requisição de atividade: {e}")
+        time.sleep(600)  # Aguarda 10 minutos antes de enviar a próxima requisição
+
 if __name__ == '__main__':
+    # Inicia um thread para manter a instância ativa
+    threading.Thread(target=keep_alive, daemon=True).start()
     app.run(host="0.0.0.0")
