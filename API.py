@@ -6,6 +6,7 @@ import datetime
 from datetime import timedelta
 from flask import Flask, request, jsonify
 import time
+import threading
 
 load_dotenv()
 
@@ -27,13 +28,6 @@ def generate_key():
 
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
-    """
-    Endpoint protegido que gera múltiplas chaves de uma vez.
-    O número de chaves geradas é especificado na URL (1 a 300).
-    É necessário enviar no cabeçalho 'X-Gen-Password' a senha secreta de 500 caracteres.
-    O JSON de entrada deve conter o campo "tipo" com valor "Uso Único" ou "LifeTime".
-    """
-    
     if quantidade < 1 or quantidade > 300:
         return jsonify({"error": "Quantidade deve ser entre 1 e 300."}), 400
     
@@ -70,12 +64,6 @@ def gerar_multiplo(quantidade):
 
 @app.route('/validate', methods=['POST'])
 def validate():
-    """
-    Endpoint para validação de uma chave.
-    Recebe um JSON com o campo "chave" e retorna se ela é válida ou não.
-    Para chaves de "Uso Único", marca como utilizada.
-    Para chaves "LifeTime", estende a expiração para um prazo muito longo.
-    """
     data = request.get_json()
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
@@ -96,8 +84,11 @@ def validate():
             return jsonify({"valid": False, "message": "Chave já utilizada."}), 400
         registro["used"] = True
     elif registro["tipo"] == "LifeTime":
-        far_future = now + timedelta(days=365 * 100)
-        registro["expire_at"] = far_future.isoformat()
+        return jsonify({
+            "valid": True,
+            "tipo": registro["tipo"],
+            "message": "Chave Permanente Utilizada."
+        }), 200
 
     return jsonify({
         "valid": True,
@@ -105,6 +96,21 @@ def validate():
         "expire_at": registro["expire_at"],
         "message": "Chave validada com sucesso."
     }), 200
+
+@app.route('/atividade', methods=['GET'])
+def atividade():
+    """
+    Endpoint de keep-alive que é acionado com intervalos de tempo aleatórios entre 1 e 10 minutos.
+    65% de chance de ser acionado após 3 minutos ou mais.
+    """
+    tempo_aleatorio = random.randint(1, 10) * 60
+    
+    if random.random() < 0.65:
+        tempo_aleatorio = random.randint(3, 10) * 60
+
+    threading.Timer(tempo_aleatorio, lambda: None).start()
+
+    return jsonify({"message": f"Keep-alive acionado. Aguardando {tempo_aleatorio // 60} minutos."}), 200
 
 @app.route('/', methods=['GET'])
 def index():
