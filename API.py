@@ -5,17 +5,19 @@ import string
 import datetime
 from datetime import timedelta
 from flask import Flask, request, jsonify
-import requests
-import threading
 import time
+import threading
+import requests
 
 load_dotenv()
 
 app = Flask(__name__)
 
+
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
 if not SUPER_PASSWORD or len(SUPER_PASSWORD) != 500:
     raise Exception("A variável de ambiente GEN_PASSWORD deve estar definida com exatamente 500 caracteres.")
+
 
 keys_data = {}
 
@@ -49,7 +51,7 @@ def gerar():
 
     chave = generate_key()
     now = datetime.datetime.now()
-
+    
     expire_at = now + timedelta(hours=6)
     keys_data[chave] = {
         "tipo": tipo,
@@ -102,25 +104,39 @@ def validate():
         "message": "Chave validada com sucesso."
     }), 200
 
-@app.route('/atividade', methods=['POST'])
-def atividade():
-    """Endpoint para enviar uma requisição POST para manter a instância ativa."""
-    return jsonify({"message": "Atividade registrada."}), 200
-
 @app.route('/', methods=['GET'])
 def index():
     return jsonify({"message": "API de chaves rodando."})
 
-def keep_alive():
-    """Função para enviar uma requisição POST para o próprio servidor a cada 10 minutos."""
+
+def send_activity_request():
+    try:
+        response = requests.post("https://four3nuihgv7834hgv783h8fvhn2847nrv8h3hn7-bgn5.onrender.com/atividade")
+        print("Requisição de atividade enviada.")
+    except Exception as e:
+        print(f"Erro ao enviar requisição de atividade: {e}")
+
+
+def random_time_interval():
+    
+    base_time = random.randint(60, 890)
+    
+    if random.random() < 0.85:
+        base_time = random.randint(360, 890)
+    return base_time
+
+
+def activity_loop():
     while True:
-        try:
-            requests.post("https://four3nuihgv7834hgv783h8fvhn2847nrv8h3hn7-bgn5.onrender.com/atividade")
-        except requests.exceptions.RequestException as e:
-            print(f"Erro ao enviar requisição de atividade: {e}")
-        time.sleep(600)
+        
+        wait_time = random_time_interval()
+        print(f"Aguardando {wait_time} segundos antes de enviar a próxima requisição...")
+        time.sleep(wait_time)
+        send_activity_request()
+
+thread = threading.Thread(target=activity_loop)
+thread.daemon = True
+thread.start()
 
 if __name__ == '__main__':
-    
-    threading.Thread(target=keep_alive, daemon=True).start()
     app.run(host="0.0.0.0")
