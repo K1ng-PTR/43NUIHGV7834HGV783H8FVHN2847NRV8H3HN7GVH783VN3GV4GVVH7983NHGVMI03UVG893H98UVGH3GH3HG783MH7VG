@@ -99,9 +99,9 @@ def validate():
         "message": "Chave validada com sucesso."
     }), 200
 
-@app.route('/', methods=['GET'])
-def index():
-    return jsonify({"message": "API de chaves rodando."})
+@app.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({"status": "alive"}), 200
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0")
