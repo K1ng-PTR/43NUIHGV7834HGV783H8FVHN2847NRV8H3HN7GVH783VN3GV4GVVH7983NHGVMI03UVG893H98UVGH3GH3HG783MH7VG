@@ -99,21 +99,6 @@ def validate():
         "message": "Chave validada com sucesso."
     }), 200
 
-@app.route('/atividade', methods=['GET'])
-def atividade():
-    """
-    Endpoint de keep-alive que é acionado com intervalos de tempo aleatórios entre 1 e 10 minutos.
-    65% de chance de ser acionado após 3 minutos ou mais.
-    """
-    tempo_aleatorio = random.randint(1, 10) * 60
-    
-    if random.random() < 0.65:
-        tempo_aleatorio = random.randint(3, 10) * 60
-
-    threading.Timer(tempo_aleatorio, lambda: None).start()
-
-    return jsonify({"message": f"Keep-alive acionado. Aguardando {tempo_aleatorio // 60} minutos."}), 200
-
 @app.route('/', methods=['GET'])
 def index():
     return jsonify({"message": "API de chaves rodando."})
