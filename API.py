@@ -69,7 +69,7 @@ def gerar_multiplo(quantidade):
 
     return jsonify({"chaves": chaves_geradas}), 200
 
-@app.route('/validate', methods=['POST'])
+@app.route('/validation', methods=['POST'])
 def validate():
     data = request.get_json()
     if not data or 'chave' not in data:
