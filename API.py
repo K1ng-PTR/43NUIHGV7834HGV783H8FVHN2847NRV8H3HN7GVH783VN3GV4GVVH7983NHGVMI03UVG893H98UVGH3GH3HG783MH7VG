@@ -47,17 +47,24 @@ def gerar_multiplo(quantidade):
     now = datetime.datetime.now()
     for _ in range(quantidade):
         chave = generate_key()
-        expire_at = now + timedelta(hours=6)
-        keys_data[chave] = {
+        if tipo == "Uso Único":
+            expire_at = now + timedelta(days=1)  # Expiração de 1 dia para 'Uso Único'
+        else:  # 'LifeTime'
+            expire_at = None  # Sem expiração para 'LifeTime'
+
+        chave_data = {
             "tipo": tipo,
             "generated": now.isoformat(),
-            "expire_at": expire_at.isoformat(),
-            "used": False
+            "expire_at": expire_at.isoformat() if expire_at else None,
+            "used": False  # Controla o uso para o tipo 'LifeTime'
         }
+        
+        keys_data[chave] = chave_data
+
         chaves_geradas.append({
             "chave": chave,
             "tipo": tipo,
-            "expire_at": expire_at.isoformat()
+            "expire_at": expire_at.isoformat() if expire_at else None
         })
 
     return jsonify({"chaves": chaves_geradas}), 200
@@ -74,26 +81,25 @@ def validate():
         return jsonify({"valid": False, "message": "Chave inválida."}), 400
 
     now = datetime.datetime.now()
-    expire_at = datetime.datetime.fromisoformat(registro["expire_at"])
-    if now > expire_at:
-        keys_data.pop(chave, None)
-        return jsonify({"valid": False, "message": "Chave expirada."}), 400
+    if registro["expire_at"]:
+        expire_at = datetime.datetime.fromisoformat(registro["expire_at"])
+        if now > expire_at:
+            keys_data.pop(chave, None)
+            return jsonify({"valid": False, "message": "Chave expirada."}), 400
 
     if registro["tipo"] == "Uso Único":
+        # Verifica se a chave já foi usada
+        return jsonify({"valid": False, "message": "Chave já utilizada."}), 400
+
+    if registro["tipo"] == "LifeTime":
         if registro["used"]:
-            return jsonify({"valid": False, "message": "Chave já utilizada."}), 400
+            return jsonify({"valid": False, "message": "Chave Permanente já utilizada."}), 400
         registro["used"] = True
-    elif registro["tipo"] == "LifeTime":
-        return jsonify({
-            "valid": True,
-            "tipo": registro["tipo"],
-            "message": "Chave Permanente Utilizada."
-        }), 200
 
     return jsonify({
         "valid": True,
         "tipo": registro["tipo"],
-        "expire_at": registro["expire_at"],
+        "expire_at": registro["expire_at"] if registro["expire_at"] else "Sem expiração",
         "message": "Chave validada com sucesso."
     }), 200
 
