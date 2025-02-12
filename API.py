@@ -48,8 +48,8 @@ def gerar_multiplo(quantidade):
     for _ in range(quantidade):
         chave = generate_key()
         if tipo == "Uso Único":
-            expire_at = now + timedelta(days=1)'
-        else:  # 'LifeTime'
+            expire_at = now + timedelta(days=1)
+        else:
             expire_at = None
 
         chave_data = {
