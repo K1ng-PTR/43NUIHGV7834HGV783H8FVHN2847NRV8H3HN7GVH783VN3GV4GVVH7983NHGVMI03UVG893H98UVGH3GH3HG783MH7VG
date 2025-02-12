@@ -48,15 +48,15 @@ def gerar_multiplo(quantidade):
     for _ in range(quantidade):
         chave = generate_key()
         if tipo == "Uso Único":
-            expire_at = now + timedelta(days=1)  # Expiração de 1 dia para 'Uso Único'
+            expire_at = now + timedelta(days=1)'
         else:  # 'LifeTime'
-            expire_at = None  # Sem expiração para 'LifeTime'
+            expire_at = None
 
         chave_data = {
             "tipo": tipo,
             "generated": now.isoformat(),
             "expire_at": expire_at.isoformat() if expire_at else None,
-            "used": False  # Controla o uso para o tipo 'LifeTime'
+            "used": False
         }
         
         keys_data[chave] = chave_data
@@ -87,14 +87,10 @@ def validate():
             keys_data.pop(chave, None)
             return jsonify({"valid": False, "message": "Chave expirada."}), 400
 
-    if registro["tipo"] == "Uso Único":
-        # Verifica se a chave já foi usada
+    if registro["used"]:
         return jsonify({"valid": False, "message": "Chave já utilizada."}), 400
 
-    if registro["tipo"] == "LifeTime":
-        if registro["used"]:
-            return jsonify({"valid": False, "message": "Chave Permanente já utilizada."}), 400
-        registro["used"] = True
+    registro["used"] = True
 
     return jsonify({
         "valid": True,
