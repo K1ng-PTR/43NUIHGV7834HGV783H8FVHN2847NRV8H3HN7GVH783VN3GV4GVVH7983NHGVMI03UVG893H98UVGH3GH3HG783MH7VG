@@ -103,5 +103,10 @@ def validate():
 def ping():
     return jsonify({"status": "alive"}), 200
 
+@app.route('/', methods=['POST'])
+def index():
+    return jsonify({"message": "API de chaves rodando."}), 200
+
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0")
