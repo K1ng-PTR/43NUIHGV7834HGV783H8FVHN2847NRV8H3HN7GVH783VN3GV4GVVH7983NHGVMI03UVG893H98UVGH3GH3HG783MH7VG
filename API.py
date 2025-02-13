@@ -7,9 +7,6 @@ from datetime import timedelta
 from flask import Flask, request, jsonify
 import stripe
 import requests
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import discord
 from discord.ext import commands
 import threading
@@ -17,7 +14,7 @@ import asyncio
 
 load_dotenv()
 
-# Evento para indicar que o bot está pronto
+# Evento para sinalizar que o bot está pronto
 bot_ready_event = threading.Event()
 
 app = Flask(__name__)
@@ -25,11 +22,11 @@ app = Flask(__name__)
 # --- Variáveis de Ambiente ---
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
 if not SUPER_PASSWORD or len(SUPER_PASSWORD) != 500:
-    raise Exception("A variável de ambiente GEN_PASSWORD deve estar definida com exatamente 500 caracteres.")
+    raise Exception("GEN_PASSWORD deve ter exatamente 500 caracteres.")
 
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 if not WEBHOOK_SECRET:
-    raise Exception("A variável de ambiente STRIPE_WEBHOOK_SECRET deve estar definida.")
+    raise Exception("STRIPE_WEBHOOK_SECRET é necessário.")
 
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
 if STRIPE_SECRET_KEY:
@@ -37,20 +34,11 @@ if STRIPE_SECRET_KEY:
 
 DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 if not DISCORD_BOT_TOKEN:
-    raise Exception("A variável de ambiente DISCORD_BOT_TOKEN deve estar definida.")
+    raise Exception("DISCORD_BOT_TOKEN é necessário.")
 
 DISCORD_CHANNEL_ID = os.environ.get("DISCORD_CHANNEL_ID")
 if not DISCORD_CHANNEL_ID:
-    raise Exception("A variável de ambiente DISCORD_CHANNEL_ID deve estar definida.")
-
-# Variáveis para envio de email
-SMTP_SERVER = os.environ.get("SMTP_SERVER")      # Ex: smtp.gmail.com
-SMTP_PORT = os.environ.get("SMTP_PORT")          # Ex: 587
-SMTP_USER = os.environ.get("SMTP_USER")
-SMTP_PASS = os.environ.get("SMTP_PASS")
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
-if not all([SMTP_SERVER, SMTP_PORT, SMTP_USER, SMTP_PASS, SENDER_EMAIL]):
-    raise Exception("As variáveis de ambiente para email não estão definidas corretamente.")
+    raise Exception("DISCORD_CHANNEL_ID é necessário.")
 
 # --- Armazenamento das Chaves ---
 keys_data = {}      # Mapeia a chave gerada para seus detalhes.
@@ -63,23 +51,6 @@ def generate_key():
         group = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
         groups.append(group)
     return '-'.join(groups)
-
-def send_email(to_email, subject, body):
-    """Envia um email usando SMTP com o corpo em HTML."""
-    msg = MIMEMultipart()
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = to_email
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'html'))
-    try:
-        server = smtplib.SMTP(SMTP_SERVER, int(SMTP_PORT))
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
-        server.quit()
-        print(f"Email enviado para {to_email}")
-    except Exception as e:
-        print("Erro ao enviar email:", e)
 
 # --- Configuração do Bot do Discord ---
 intents = discord.Intents.default()
@@ -114,6 +85,10 @@ async def send_discord_embed(session_id, tipo, chave):
 
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
+    """
+    Gera múltiplas chaves manualmente.
+    Requer header "X-Gen-Password" e JSON com "tipo": "Uso Único" ou "LifeTime".
+    """
     if quantidade < 1 or quantidade > 300:
         return jsonify({"error": "Quantidade deve ser entre 1 e 300."}), 400
     provided_password = request.headers.get("X-Gen-Password", "")
@@ -146,6 +121,10 @@ def gerar_multiplo(quantidade):
 
 @app.route('/validation', methods=['POST'])
 def validate():
+    """
+    Valida uma chave.
+    No JSON, informe: { "chave": "XXXXX-XXXXX-XXXXX-XXXXX" }.
+    """
     data = request.get_json()
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
@@ -179,6 +158,12 @@ def index():
 
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
+    """
+    Processa o webhook da Stripe.
+    Extrai o metadata (com "product_id") para definir o tipo de compra,
+    gera a chave e agenda o envio de um embed via Discord com as informações do pagamento.
+    A URL de sucesso pode ser definida na sessão de checkout da Stripe para redirecionar o usuário.
+    """
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
     try:
@@ -191,10 +176,6 @@ def stripe_webhook():
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        # Obter o e-mail do cliente
-        customer_details = session.get("customer_details", {})
-        email = customer_details.get("email")
-
         # Determinar o tipo de compra com base no metadata (product_id)
         metadata = session.get("metadata", {})
         product_id = metadata.get("product_id", "")
@@ -206,12 +187,12 @@ def stripe_webhook():
             tipo = "LifeTime"
 
         # Gerar a chave
-        now = datetime.datetime.now()
-        expire_at = now + timedelta(days=1) if tipo == "Uso Único" else None
+        now_dt = datetime.datetime.now()
+        expire_at = now_dt + timedelta(days=1) if tipo == "Uso Único" else None
         chave = generate_key()
         chave_data = {
             "tipo": tipo,
-            "generated": now.isoformat(),
+            "generated": now_dt.isoformat(),
             "expire_at": expire_at.isoformat() if expire_at else None,
             "used": False
         }
@@ -222,23 +203,9 @@ def stripe_webhook():
         session_keys[session_id] = chave
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
-        # Envia o e-mail para o cliente
-        if email:
-            subject = "Sua License Key"
-            body = f"""
-            <h1>Obrigado pelo seu pagamento!</h1>
-            <p>Tipo de compra: {tipo}</p>
-            <p>Sua chave de licença: <strong>{chave}</strong></p>
-            <p>Session ID: {session_id}</p>
-            """
-            send_email(email, subject, body)
-        else:
-            print("E-mail do cliente não encontrado.")
-
-        # Agendar o envio do embed para o Discord
+        # Agenda o envio do embed para o Discord
         async def schedule_embed():
             await send_discord_embed(session_id, tipo, chave)
-        # Se o loop do Discord não estiver disponível, aguarde até que o bot esteja pronto
         if discord_loop is None:
             print("Loop do Discord não disponível, aguardando bot_ready_event...")
             bot_ready_event.wait(timeout=10)
@@ -251,20 +218,72 @@ def stripe_webhook():
 
 @app.route("/sucesso", methods=["GET"])
 def sucesso():
+    """
+    Retorna uma página HTML personalizada com os detalhes do pagamento (chave, tipo, etc).
+    Essa página será exibida após a compra bem-sucedida.
+    Espera o parâmetro "session_id" na URL.
+    """
     session_id = request.args.get("session_id")
     if not session_id:
-        return jsonify({"error": "session_id é necessário."}), 400
+        return "<h1>Erro:</h1><p>session_id é necessário.</p>", 400
     chave = session_keys.get(session_id)
     if not chave:
-        return jsonify({"error": "Chave não encontrada para a sessão fornecida."}), 404
+        return "<h1>Erro:</h1><p>Chave não encontrada para a sessão fornecida.</p>", 404
     detalhes = keys_data.get(chave)
     if not detalhes:
-        return jsonify({"error": "Detalhes da chave não encontrados."}), 404
-    return jsonify({
-        "message": "Pagamento realizado com sucesso!",
-        "chave": chave,
-        "detalhes": detalhes
-    }), 200
+        return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Pagamento Realizado com Sucesso</title>
+      <style>
+        body {{
+          background-color: #f2f2f2;
+          font-family: Arial, sans-serif;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          margin: 0;
+        }}
+        .container {{
+          background-color: #fff;
+          padding: 30px;
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          max-width: 600px;
+          width: 90%;
+        }}
+        h1 {{
+          color: #333;
+        }}
+        p {{
+          color: #555;
+          font-size: 1.1em;
+        }}
+        .chave {{
+          font-size: 1.4em;
+          color: #007BFF;
+          font-weight: bold;
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Pagamento Realizado com Sucesso!</h1>
+        <p>Tipo de compra: {detalhes["tipo"]}</p>
+        <p>Sua chave de licença é: <span class="chave">{chave}</span></p>
+        <p>Session ID: {session_id}</p>
+        <p>{ "Validade: " + detalhes["expire_at"] if detalhes["expire_at"] else "Sem expiração" }</p>
+      </div>
+    </body>
+    </html>
+    """
+    return html
 
 def start_discord_bot():
     bot.run(DISCORD_BOT_TOKEN)
