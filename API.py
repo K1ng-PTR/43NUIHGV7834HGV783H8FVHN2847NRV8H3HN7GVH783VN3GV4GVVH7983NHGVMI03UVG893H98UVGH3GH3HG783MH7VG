@@ -186,8 +186,13 @@ def stripe_webhook():
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
+
+        # Obter o e-mail do cliente
+        customer_details = session.get("customer_details", {})
+        email = customer_details.get("email")
+
+        # Determinar o tipo de compra
         metadata = session.get("metadata", {})
-        print("Metadata recebido:", metadata)
         product_id = metadata.get("product_id", "")
         if product_id == "prod_RlN66JRR2CKeIb":
             tipo = "LifeTime"
@@ -195,6 +200,8 @@ def stripe_webhook():
             tipo = "Uso Único"
         else:
             tipo = "LifeTime"
+
+        # Gerar a chave
         now = datetime.datetime.now()
         expire_at = now + timedelta(days=1) if tipo == "Uso Único" else None
         chave = generate_key()
@@ -209,20 +216,21 @@ def stripe_webhook():
         session_keys[session_id] = chave
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
-        customer_details = session.get("customer_details", {})
-        email = customer_details.get("email")
+        # Enviar o e-mail para o cliente
         if email:
-            subject = "Sua License Key"
+            subject = "Sua Chave de Produto"
             body = f"""
-            <h1>Agradecemos o pagamento!</h1>
+            <h1>Obrigado pelo seu pagamento!</h1>
             <p>Tipo de compra: {tipo}</p>
             <p>Sua chave de licença: <strong>{chave}</strong></p>
             <p>Session ID: {session_id}</p>
             """
             send_email(email, subject, body)
+            print(f"E-mail enviado para {email}")
         else:
-            print("Email do cliente não encontrado.")
+            print("E-mail do cliente não encontrado.")
 
+        # Enviar notificação no Discord
         async def schedule_embed():
             await send_discord_embed(session_id, tipo, chave)
         if discord_loop is not None:
