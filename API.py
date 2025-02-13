@@ -56,13 +56,16 @@ def generate_key():
         groups.append(group)
     return '-'.join(groups)
 
+# Lista para armazenar embeds pendentes
+pending_embeds = []
+
 # --- Configuração do Bot do Discord ---
 intents = discord.Intents.default()
 intents.messages = True
 intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Global para armazenar o loop do bot
+# Global para armazenar o loop do Discord
 discord_loop = None
 
 @bot.event
@@ -71,6 +74,14 @@ async def on_ready():
     discord_loop = asyncio.get_running_loop()
     print(f"Bot {bot.user} conectado ao Discord!")
     bot_ready_event.set()
+    # Envia quaisquer embeds pendentes
+    if pending_embeds:
+        for session_id, tipo, chave in pending_embeds:
+            try:
+                await send_discord_embed(session_id, tipo, chave)
+            except Exception as e:
+                print(f"Erro ao enviar embed pendente: {e}")
+        pending_embeds.clear()
 
 async def send_discord_embed(session_id, tipo, chave):
     """Envia um embed com as informações do pagamento para o canal configurado."""
@@ -212,10 +223,16 @@ def stripe_webhook():
         session_keys[session_id] = chave
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
-        # Envia o embed para o Discord (o loop já estará disponível)
+        # Função para enviar o embed
         async def schedule_embed():
             await send_discord_embed(session_id, tipo, chave)
-        asyncio.run_coroutine_threadsafe(schedule_embed(), discord_loop)
+
+        # Se o loop do Discord não estiver disponível, armazena para envio posterior
+        if discord_loop is None:
+            print("Loop do Discord não disponível, armazenando embed para envio posterior.")
+            pending_embeds.append((session_id, tipo, chave))
+        else:
+            asyncio.run_coroutine_threadsafe(schedule_embed(), discord_loop)
 
     return jsonify({"status": "success"}), 200
 
