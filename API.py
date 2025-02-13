@@ -40,6 +40,10 @@ DISCORD_CHANNEL_ID = os.environ.get("DISCORD_CHANNEL_ID")
 if not DISCORD_CHANNEL_ID:
     raise Exception("DISCORD_CHANNEL_ID é necessário.")
 
+# --- Links de Checkout Estáticos ---
+LINK_USO_UNICO = "https://buy.stripe.com/test_6oE9E70jrdL47cseV7"
+LINK_LIFETIME  = "https://buy.stripe.com/test_8wM2bF1nv0YiaoEbIU"
+
 # --- Armazenamento das Chaves ---
 keys_data = {}      # Mapeia a chave gerada para seus detalhes.
 session_keys = {}   # Mapeia o session_id da Stripe para a chave gerada.
@@ -72,9 +76,11 @@ async def send_discord_embed(session_id, tipo, chave):
     """Envia um embed com as informações do pagamento para o canal configurado."""
     channel = bot.get_channel(int(DISCORD_CHANNEL_ID))
     if channel:
-        embed = discord.Embed(title="Pagamento Finalizado",
-                              description=f"Session ID: {session_id}",
-                              color=discord.Color.green())
+        embed = discord.Embed(
+            title="Pagamento Finalizado",
+            description=f"Session ID: {session_id}",
+            color=discord.Color.green()
+        )
         embed.add_field(name="Tipo de Compra", value=tipo, inline=False)
         embed.add_field(name="Chave Gerada", value=chave, inline=False)
         await channel.send(embed=embed)
@@ -160,8 +166,8 @@ def index():
 def stripe_webhook():
     """
     Processa o webhook da Stripe.
-    Extrai o metadata (com "product_id") para definir o tipo de compra,
-    gera a chave e agenda o envio de um embed via Discord com as informações do pagamento.
+    Em vez de depender do metadata, identifica o tipo de compra pelo link de checkout utilizado.
+    Em seguida, gera a chave e agenda o envio de um embed via Discord com as informações do pagamento.
     """
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
@@ -175,25 +181,18 @@ def stripe_webhook():
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        # Determinar o tipo de compra com base no metadata (product_id)
-        metadata = session.get("metadata", {})
-        product_id = metadata.get("product_id", "")
-        
-        # Exibe o ID do produto para debug (opcional)
-        print(f"Product ID: {product_id}")
-        
-        if product_id == "prod_RlN66JRR2CKeIb":
-            tipo = "LifeTime"
-        elif product_id == "prod_RlNgQjVMVm9Jm5":
+        # Verifica qual link de checkout foi usado
+        checkout_url = session.get("url", "")
+        print(f"Checkout URL: {checkout_url}")
+
+        if checkout_url == LINK_USO_UNICO:
             tipo = "Uso Único"
+        elif checkout_url == LINK_LIFETIME:
+            tipo = "LifeTime"
         else:
+            # Valor padrão caso não identifique
             tipo = "LifeTime"
         
-        # Armazena o tipo na sessão
-        metadata["tipo"] = tipo
-        session["metadata"] = metadata
-        
-        # Exibe o tipo da chave para debug (opcional)
         print(f"Tipo de chave: {tipo}")
 
         # Gerar a chave
