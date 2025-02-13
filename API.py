@@ -25,9 +25,8 @@ STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
-# Token do Bot do Discord obtido via variável de ambiente
-BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
-if not BOT_TOKEN:
+DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
+if not DISCORD_BOT_TOKEN:
     raise Exception("A variável de ambiente DISCORD_BOT_TOKEN deve estar definida.")
 
 # --- Armazenamento das chaves geradas ---
@@ -46,14 +45,14 @@ def generate_key():
 
 def send_discord_dm(user_id, message):
     """
-    Envia uma DM para o usuário do Discord utilizando a API.
-    Primeiro, cria um canal DM e, em seguida, envia a mensagem.
+    Envia uma mensagem direta (DM) para o usuário do Discord usando a API do Discord.
+    Cria um canal DM e envia a mensagem.
     """
     headers = {
-        "Authorization": f"Bot {BOT_TOKEN}",
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
         "Content-Type": "application/json"
     }
-    # Criar canal DM
+    # Cria o canal DM
     data = {"recipient_id": user_id}
     response = requests.post("https://discord.com/api/v9/users/@me/channels", headers=headers, json=data)
     if response.status_code not in (200, 201):
@@ -66,7 +65,7 @@ def send_discord_dm(user_id, message):
         print("Canal DM não retornado corretamente.")
         return False
 
-    # Enviar mensagem
+    # Envia a mensagem com a chave gerada
     msg_data = {"content": message}
     msg_response = requests.post(f"https://discord.com/api/v9/channels/{channel_id}/messages", headers=headers, json=msg_data)
     if msg_response.status_code in (200, 201):
@@ -79,9 +78,9 @@ def send_discord_dm(user_id, message):
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
     """
-    Gera múltiplas chaves.
-    - Cabeçalho: X-Gen-Password com o valor definido em GEN_PASSWORD.
-    - Body JSON: { "tipo": "Uso Único" } ou { "tipo": "LifeTime" }.
+    Gera múltiplas chaves manualmente.
+    Requer o header "X-Gen-Password" com o valor definido em GEN_PASSWORD.
+    No body (JSON), deve ser informado "tipo": "Uso Único" ou "LifeTime".
     """
     if quantidade < 1 or quantidade > 300:
         return jsonify({"error": "Quantidade deve ser entre 1 e 300."}), 400
@@ -114,7 +113,6 @@ def gerar_multiplo(quantidade):
             "used": False
         }
         keys_data[chave] = chave_data
-
         chaves_geradas.append({
             "chave": chave,
             "tipo": tipo,
@@ -127,8 +125,8 @@ def gerar_multiplo(quantidade):
 @app.route('/validation', methods=['POST'])
 def validate():
     """
-    Valida a chave enviada.
-    Body JSON: { "chave": "XXXXX-XXXXX-XXXXX-XXXXX" }
+    Valida uma chave.
+    No body (JSON), informe: { "chave": "XXXXX-XXXXX-XXXXX-XXXXX" }.
     """
     data = request.get_json()
     if not data or 'chave' not in data:
@@ -150,7 +148,6 @@ def validate():
         return jsonify({"valid": False, "message": "Chave já utilizada."}), 400
 
     registro["used"] = True
-
     return jsonify({
         "valid": True,
         "tipo": registro["tipo"],
@@ -171,15 +168,13 @@ def index():
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     """
-    Recebe eventos da Stripe e gera a chave correspondente.
-    Para identificar o tipo de chave, utiliza o campo "product_id" definido em metadata:
-      - Se product_id for "prod_RlN66JRR2CKeIb": gera chave do tipo LifeTime.
-      - Se product_id for "prod_RlNgQjVMVm9Jm5": gera chave do tipo Uso Único (expira em 1 dia).
-    Também extrai "discord_user_id" do metadata para enviar a chave via DM.
+    Processa o webhook da Stripe.
+    Verifica se o evento é checkout.session.completed, extrai o metadata (product_id e discord_user_id),
+    gera a chave (tipo definido conforme product_id) e envia a chave para o usuário no Discord via DM.
+    Também associa o session_id da Stripe à chave gerada para uso na página de sucesso.
     """
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
-
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
     except stripe.error.SignatureVerificationError as e:
@@ -189,14 +184,17 @@ def stripe_webhook():
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
+        metadata = session.get("metadata", {})
+        print("Metadata recebido:", metadata)
 
-        # Identifica o tipo de chave a partir do product_id
-        product_id = session.get("metadata", {}).get("product_id", "")
+        # Determina o tipo de chave com base no product_id do metadata
+        product_id = metadata.get("product_id", "")
         if product_id == "prod_RlN66JRR2CKeIb":
             tipo = "LifeTime"
         elif product_id == "prod_RlNgQjVMVm9Jm5":
             tipo = "Uso Único"
         else:
+            # Valor padrão se product_id não estiver presente ou for diferente
             tipo = "LifeTime"
 
         now = datetime.datetime.now()
@@ -205,6 +203,7 @@ def stripe_webhook():
         else:
             expire_at = None
 
+        # Gera a chave e armazena seus detalhes
         chave = generate_key()
         chave_data = {
             "tipo": tipo,
@@ -212,7 +211,7 @@ def stripe_webhook():
             "expire_at": expire_at.isoformat() if expire_at else None,
             "used": False
         }
-        keys_data[chave] = chave
+        keys_data[chave] = chave_data
 
         # Armazena o mapeamento do session_id para a chave gerada
         session_id = session.get("id")
@@ -220,14 +219,16 @@ def stripe_webhook():
 
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
-        # Envia DM via Discord se o discord_user_id estiver presente
-        discord_user_id = session.get("metadata", {}).get("discord_user_id", None)
+        # Extrai o discord_user_id do metadata (campo configurado na criação da sessão)
+        discord_user_id = metadata.get("discord_user_id")
         if discord_user_id:
             message = f"Agradecemos o pagamento! Sua chave de licença é: **{chave}**"
             if send_discord_dm(discord_user_id, message):
                 print(f"Chave enviada para o Discord User ID: {discord_user_id}")
             else:
                 print(f"Falha ao enviar a chave para o Discord User ID: {discord_user_id}")
+        else:
+            print("discord_user_id não encontrado no metadata.")
 
     return jsonify({"status": "success"}), 200
 
@@ -236,7 +237,7 @@ def stripe_webhook():
 def sucesso():
     """
     Exibe a chave gerada após o pagamento.
-    Espera o parâmetro "session_id" na URL, que foi definido na success_url da sessão do Stripe.
+    Espera o parâmetro "session_id" na URL (definido na success_url da sessão do Stripe).
     """
     session_id = request.args.get("session_id")
     if not session_id:
@@ -246,7 +247,6 @@ def sucesso():
     if not chave:
         return jsonify({"error": "Chave não encontrada para a sessão fornecida."}), 404
 
-    # Recupera os detalhes da chave
     detalhes = keys_data.get(chave)
     if not detalhes:
         return jsonify({"error": "Detalhes da chave não encontrados."}), 404
