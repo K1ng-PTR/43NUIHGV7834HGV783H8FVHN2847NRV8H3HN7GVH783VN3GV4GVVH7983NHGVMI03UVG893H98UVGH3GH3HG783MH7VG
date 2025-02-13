@@ -179,12 +179,23 @@ def stripe_webhook():
         # Determinar o tipo de compra com base no metadata (product_id)
         metadata = session.get("metadata", {})
         product_id = metadata.get("product_id", "")
+        
+        # Exibe o ID do produto para debug (opcional)
+        print(f"Product ID: {product_id}")
+        
         if product_id == "prod_RlN66JRR2CKeIb":
             tipo = "LifeTime"
         elif product_id == "prod_RlNgQjVMVm9Jm5":
             tipo = "Uso Único"
         else:
             tipo = "LifeTime"
+        
+        # Armazena o tipo na sessão
+        metadata["tipo"] = tipo
+        session["metadata"] = metadata
+        
+        # Exibe o tipo da chave para debug (opcional)
+        print(f"Tipo de chave: {tipo}")
 
         # Gerar a chave
         now_dt = datetime.datetime.now()
