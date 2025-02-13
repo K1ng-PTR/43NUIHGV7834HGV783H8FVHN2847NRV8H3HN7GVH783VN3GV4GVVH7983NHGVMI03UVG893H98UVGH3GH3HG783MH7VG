@@ -17,6 +17,7 @@ import asyncio
 
 load_dotenv()
 
+# Evento para indicar que o bot está pronto
 bot_ready_event = threading.Event()
 
 app = Flask(__name__)
@@ -94,6 +95,7 @@ async def on_ready():
     global discord_loop
     discord_loop = asyncio.get_running_loop()
     print(f"Bot {bot.user} conectado ao Discord!")
+    bot_ready_event.set()
 
 async def send_discord_embed(session_id, tipo, chave):
     """Envia um embed com as informações do pagamento para o canal configurado."""
@@ -193,7 +195,7 @@ def stripe_webhook():
         customer_details = session.get("customer_details", {})
         email = customer_details.get("email")
 
-        # Determinar o tipo de compra
+        # Determinar o tipo de compra com base no metadata (product_id)
         metadata = session.get("metadata", {})
         product_id = metadata.get("product_id", "")
         if product_id == "prod_RlN66JRR2CKeIb":
@@ -214,13 +216,15 @@ def stripe_webhook():
             "used": False
         }
         keys_data[chave] = chave_data
+
+        # Associa o session_id à chave gerada
         session_id = session.get("id")
         session_keys[session_id] = chave
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
-        # Enviar o e-mail para o cliente
+        # Envia o e-mail para o cliente
         if email:
-            subject = "Sua Chave de Produto"
+            subject = "Sua License Key"
             body = f"""
             <h1>Obrigado pelo seu pagamento!</h1>
             <p>Tipo de compra: {tipo}</p>
@@ -228,17 +232,20 @@ def stripe_webhook():
             <p>Session ID: {session_id}</p>
             """
             send_email(email, subject, body)
-            print(f"E-mail enviado para {email}")
         else:
             print("E-mail do cliente não encontrado.")
 
-        # Enviar notificação no Discord
+        # Agendar o envio do embed para o Discord
         async def schedule_embed():
             await send_discord_embed(session_id, tipo, chave)
+        # Se o loop do Discord não estiver disponível, aguarde até que o bot esteja pronto
+        if discord_loop is None:
+            print("Loop do Discord não disponível, aguardando bot_ready_event...")
+            bot_ready_event.wait(timeout=10)
         if discord_loop is not None:
             asyncio.run_coroutine_threadsafe(schedule_embed(), discord_loop)
         else:
-            print("Loop do Discord não disponível.")
+            print("Loop do Discord ainda não disponível, embed não enviado.")
 
     return jsonify({"status": "success"}), 200
 
