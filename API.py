@@ -13,6 +13,7 @@ from email.mime.multipart import MIMEMultipart
 import discord
 from discord.ext import commands
 import threading
+import asyncio
 
 load_dotenv()
 
@@ -40,8 +41,8 @@ if not DISCORD_CHANNEL_ID:
     raise Exception("A variável de ambiente DISCORD_CHANNEL_ID deve estar definida.")
 
 # Variáveis para envio de email
-SMTP_SERVER = os.environ.get("SMTP_SERVER")
-SMTP_PORT = os.environ.get("SMTP_PORT")
+SMTP_SERVER = os.environ.get("SMTP_SERVER")      # Ex: smtp.gmail.com
+SMTP_PORT = os.environ.get("SMTP_PORT")          # Ex: 587
 SMTP_USER = os.environ.get("SMTP_USER")
 SMTP_PASS = os.environ.get("SMTP_PASS")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
@@ -83,8 +84,13 @@ intents.messages = True
 intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Global para armazenar o loop do bot
+discord_loop = None
+
 @bot.event
 async def on_ready():
+    global discord_loop
+    discord_loop = asyncio.get_running_loop()
     print(f"Bot {bot.user} conectado ao Discord!")
 
 async def send_discord_embed(session_id, tipo, chave):
@@ -104,25 +110,17 @@ async def send_discord_embed(session_id, tipo, chave):
 
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
-    """
-    Gera múltiplas chaves manualmente.
-    Requer header "X-Gen-Password" e, no body (JSON), o campo "tipo": "Uso Único" ou "LifeTime".
-    """
     if quantidade < 1 or quantidade > 300:
         return jsonify({"error": "Quantidade deve ser entre 1 e 300."}), 400
-
     provided_password = request.headers.get("X-Gen-Password", "")
     if provided_password != SUPER_PASSWORD:
         return jsonify({"error": "Acesso não autorizado"}), 401
-
     data = request.get_json()
     if not data or 'tipo' not in data:
         return jsonify({"error": "O campo 'tipo' é obrigatório."}), 400
-
     tipo = data.get("tipo")
     if tipo not in ["Uso Único", "LifeTime"]:
         return jsonify({"error": "Tipo inválido. Deve ser 'Uso Único' ou 'LifeTime'."}), 400
-
     chaves_geradas = []
     now = datetime.datetime.now()
     for _ in range(quantidade):
@@ -140,34 +138,25 @@ def gerar_multiplo(quantidade):
             "tipo": tipo,
             "expire_at": expire_at.isoformat() if expire_at else None
         })
-
     return jsonify({"chaves": chaves_geradas}), 200
 
 @app.route('/validation', methods=['POST'])
 def validate():
-    """
-    Valida uma chave.
-    No body (JSON), informe: { "chave": "XXXXX-XXXXX-XXXXX-XXXXX" }.
-    """
     data = request.get_json()
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
-
     chave = data.get("chave")
     registro = keys_data.get(chave)
     if not registro:
         return jsonify({"valid": False, "message": "Chave inválida."}), 400
-
     now = datetime.datetime.now()
     if registro["expire_at"]:
         expire_at = datetime.datetime.fromisoformat(registro["expire_at"])
         if now > expire_at:
             keys_data.pop(chave, None)
             return jsonify({"valid": False, "message": "Chave expirada."}), 400
-
     if registro["used"]:
         return jsonify({"valid": False, "message": "Chave já utilizada."}), 400
-
     registro["used"] = True
     return jsonify({
         "valid": True,
@@ -184,15 +173,8 @@ def ping():
 def index():
     return jsonify({"message": "API de chaves rodando."}), 200
 
-# --- Endpoint do Webhook da Stripe ---
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
-    """
-    Processa o webhook da Stripe.
-    Extrai o metadata (com "product_id") para definir o tipo de compra,
-    gera a chave, envia a chave por email (usando customer_details.email)
-    e envia um embed via Discord com as informações do pagamento.
-    """
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
     try:
@@ -206,8 +188,6 @@ def stripe_webhook():
         session = event["data"]["object"]
         metadata = session.get("metadata", {})
         print("Metadata recebido:", metadata)
-
-        # Define o tipo de compra com base no product_id
         product_id = metadata.get("product_id", "")
         if product_id == "prod_RlN66JRR2CKeIb":
             tipo = "LifeTime"
@@ -215,7 +195,6 @@ def stripe_webhook():
             tipo = "Uso Único"
         else:
             tipo = "LifeTime"
-
         now = datetime.datetime.now()
         expire_at = now + timedelta(days=1) if tipo == "Uso Único" else None
         chave = generate_key()
@@ -226,13 +205,10 @@ def stripe_webhook():
             "used": False
         }
         keys_data[chave] = chave_data
-
-        # Associa o session_id à chave gerada
         session_id = session.get("id")
         session_keys[session_id] = chave
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
-        # Envia a chave por email (usando o campo email já fornecido pela Stripe)
         customer_details = session.get("customer_details", {})
         email = customer_details.get("email")
         if email:
@@ -247,20 +223,17 @@ def stripe_webhook():
         else:
             print("Email do cliente não encontrado.")
 
-        # Envia um embed para o Discord com as informações do pagamento
         async def schedule_embed():
             await send_discord_embed(session_id, tipo, chave)
-        bot.loop.create_task(schedule_embed())
+        if discord_loop is not None:
+            asyncio.run_coroutine_threadsafe(schedule_embed(), discord_loop)
+        else:
+            print("Loop do Discord não disponível.")
 
     return jsonify({"status": "success"}), 200
 
-# --- Endpoint para exibir a chave após o pagamento ---
 @app.route("/sucesso", methods=["GET"])
 def sucesso():
-    """
-    Exibe a chave gerada após o pagamento.
-    Espera o parâmetro "session_id" na URL (definido na success_url da sessão do Stripe).
-    """
     session_id = request.args.get("session_id")
     if not session_id:
         return jsonify({"error": "session_id é necessário."}), 400
@@ -276,7 +249,6 @@ def sucesso():
         "detalhes": detalhes
     }), 200
 
-# --- Inicializa o bot do Discord em uma thread separada ---
 def start_discord_bot():
     bot.run(DISCORD_BOT_TOKEN)
 
