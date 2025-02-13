@@ -166,7 +166,7 @@ def index():
 def stripe_webhook():
     """
     Processa o webhook da Stripe.
-    Em vez de depender do metadata, identifica o tipo de compra pelo link de checkout utilizado.
+    Em vez de depender do URL da sessão, identifica o tipo de compra pelo metadado "checkout_link".
     Em seguida, gera a chave e agenda o envio de um embed via Discord com as informações do pagamento.
     """
     payload = request.get_data(as_text=True)
@@ -181,18 +181,18 @@ def stripe_webhook():
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        # Verifica qual link de checkout foi usado
-        checkout_url = session.get("url", "")
-        print(f"Checkout URL: {checkout_url}")
+        # Extrai o metadado "checkout_link" para identificar o tipo de compra
+        metadata = session.get("metadata", {})
+        checkout_link = metadata.get("checkout_link", "")
+        print(f"Checkout Link (metadata): {checkout_link}")
 
-        if checkout_url == LINK_USO_UNICO:
+        if checkout_link == LINK_USO_UNICO:
             tipo = "Uso Único"
-        elif checkout_url == LINK_LIFETIME:
+        elif checkout_link == LINK_LIFETIME:
             tipo = "LifeTime"
         else:
-            # Valor padrão caso não identifique
-            tipo = "LifeTime"
-        
+            tipo = "LifeTime"  # Valor padrão
+
         print(f"Tipo de chave: {tipo}")
 
         # Gerar a chave
