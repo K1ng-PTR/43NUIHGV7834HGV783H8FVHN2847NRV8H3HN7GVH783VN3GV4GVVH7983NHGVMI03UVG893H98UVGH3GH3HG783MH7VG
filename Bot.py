@@ -2,7 +2,7 @@ import discord
 import aiohttp
 import asyncio
 import threading
-from flask import FlaskAPI_URL
+from flask import Flask
 
 # Configurações do bot
 TOKEN = "DISCORD_BOT_TOKEN"
