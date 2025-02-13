@@ -2,8 +2,8 @@ import discord
 import aiohttp
 import asyncio
 
-TOKEN = "SEU_DISCORD_BOT_TOKEN"
-CHANNEL_ID = "SEU_DISCORD_CHANNEL_ID"
+TOKEN = "DISCORD_BOT_TOKEN"
+CHANNEL_ID = "DISCORD_CHANNEL_ID"
 API_URL = "https://api-cjng.onrender.com/buys"
 
 intents = discord.Intents.default()
