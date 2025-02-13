@@ -6,7 +6,7 @@ from flask import FlaskAPI_URL
 
 # Configurações do bot
 TOKEN = "DISCORD_BOT_TOKEN"
-CHANNEL_ID = 123456789012345678  # Certifique-se de usar um número, não string
+CHANNEL_ID = 1339675439987298334  # Certifique-se de usar um número, não string
 API_URL = "https://api-cjng.onrender.com/buys"
 
 # Configurações do Flask
