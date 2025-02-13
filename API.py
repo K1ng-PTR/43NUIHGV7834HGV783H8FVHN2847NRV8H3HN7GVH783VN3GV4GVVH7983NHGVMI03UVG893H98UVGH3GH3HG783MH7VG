@@ -162,7 +162,6 @@ def stripe_webhook():
     Processa o webhook da Stripe.
     Extrai o metadata (com "product_id") para definir o tipo de compra,
     gera a chave e agenda o envio de um embed via Discord com as informações do pagamento.
-    A URL de sucesso pode ser definida na sessão de checkout da Stripe para redirecionar o usuário.
     """
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
@@ -231,8 +230,7 @@ def stripe_webhook():
 def sucesso():
     """
     Retorna uma página HTML personalizada com os detalhes do pagamento (chave, tipo, etc).
-    Essa página será exibida após a compra bem-sucedida.
-    Espera o parâmetro "session_id" na URL.
+    Essa página é exibida após a compra e espera o parâmetro "session_id" na URL.
     """
     session_id = request.args.get("session_id")
     if not session_id:
