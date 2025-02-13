@@ -240,10 +240,6 @@ def stripe_webhook():
 
 @app.route("/sucesso", methods=["GET"])
 def sucesso():
-    """
-    Retorna uma página HTML personalizada com os detalhes do pagamento (chave, tipo, etc).
-    Essa página é exibida após a compra e espera o parâmetro "session_id" na URL.
-    """
     session_id = request.args.get("session_id")
     if not session_id:
         return "<h1>Erro:</h1><p>session_id é necessário.</p>", 400
@@ -260,44 +256,82 @@ def sucesso():
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Pagamento Realizado com Sucesso</title>
+      <title>Pagamento Confirmado</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
       <style>
         body {{
-          background-color: #f2f2f2;
-          font-family: Arial, sans-serif;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100vh;
           margin: 0;
-        }}
-        .container {{
-          background-color: #fff;
-          padding: 30px;
-          border-radius: 8px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-          max-width: 600px;
-          width: 90%;
-        }}
-        h1 {{
+          padding: 0;
+          font-family: 'Montserrat', sans-serif;
+          background: linear-gradient(135deg, #1c92d2, #f2fcfe);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
           color: #333;
         }}
-        p {{
-          color: #555;
-          font-size: 1.1em;
+        .card {{
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(10px);
+          border-radius: 15px;
+          padding: 2rem;
+          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+          max-width: 500px;
+          text-align: center;
         }}
-        .chave {{
-          font-size: 1.4em;
-          color: #007BFF;
+        .card h1 {{
+          font-size: 2.5rem;
+          margin-bottom: 0.5rem;
+          color: #1c92d2;
+        }}
+        .card p {{
+          font-size: 1.1rem;
+          margin-bottom: 1rem;
+        }}
+        .key {{
+          font-size: 1.8rem;
           font-weight: bold;
+          color: #f2994a;
+          background: #fff;
+          padding: 0.5rem 1rem;
+          border-radius: 5px;
+          display: inline-block;
+          margin: 1rem 0;
+          letter-spacing: 0.1rem;
+        }}
+        .checkmark-container {{
+          margin: 0 auto 1rem;
+          width: 60px;
+          height: 60px;
+          animation: pop 0.6s ease-out;
+        }}
+        .checkmark {{
+          width: 100%;
+          height: 100%;
+          fill: #4caf50;
+        }}
+        @keyframes pop {{
+          0% {{ transform: scale(0); opacity: 0; }}
+          60% {{ transform: scale(1.2); opacity: 1; }}
+          100% {{ transform: scale(1); }}
         }}
       </style>
     </head>
     <body>
-      <div class="container">
-        <h1>Pagamento Realizado com Sucesso!</h1>
-        <p>Tipo de compra: {detalhes["tipo"]}</p>
-        <p>Sua chave de licença é: <span class="chave">{chave}</span></p>
+      <div class="card">
+        <div class="checkmark-container">
+          <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="25" fill="none" stroke="#4caf50" stroke-width="2"/>
+            <path fill="none" stroke="#4caf50" stroke-width="5" d="M14 27l7 7 16-16"/>
+          </svg>
+        </div>
+        <h1>Pagamento Confirmado!</h1>
+        <p>Obrigado por sua compra. Seu pagamento foi realizado com sucesso e sua licença é 100% autêntica.</p>
+        <p>Tipo de compra: <strong>{detalhes["tipo"]}</strong></p>
+        <p>Sua chave de licença:</p>
+        <div class="key">{chave}</div>
         <p>Session ID: {session_id}</p>
         <p>{ "Validade: " + detalhes["expire_at"] if detalhes["expire_at"] else "Sem expiração" }</p>
       </div>
