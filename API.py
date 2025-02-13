@@ -56,9 +56,6 @@ def generate_key():
         groups.append(group)
     return '-'.join(groups)
 
-# Lista para armazenar embeds pendentes
-pending_embeds = []
-
 # --- Configuração do Bot do Discord ---
 intents = discord.Intents.default()
 intents.messages = True
@@ -74,14 +71,6 @@ async def on_ready():
     discord_loop = asyncio.get_running_loop()
     print(f"Bot {bot.user} conectado ao Discord!")
     bot_ready_event.set()
-    # Se houver embeds pendentes, envia-os agora
-    if pending_embeds:
-        for session_id, tipo, chave in pending_embeds:
-            try:
-                await send_discord_embed(session_id, tipo, chave)
-            except Exception as e:
-                print(f"Erro ao enviar embed pendente: {e}")
-        pending_embeds.clear()
 
 async def send_discord_embed(session_id, tipo, chave):
     """Envia um embed com as informações do pagamento para o canal configurado."""
@@ -178,7 +167,7 @@ def stripe_webhook():
     """
     Processa o webhook da Stripe.
     Identifica o tipo de compra pelo metadado "checkout_link", gera a chave
-    e agenda o envio de um embed via Discord com as informações do pagamento.
+    e envia um embed via Discord com as informações do pagamento.
     """
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
@@ -223,23 +212,19 @@ def stripe_webhook():
         session_keys[session_id] = chave
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
-        # Agenda o envio do embed para o Discord
+        # Envia o embed para o Discord (o loop já estará disponível)
         async def schedule_embed():
             await send_discord_embed(session_id, tipo, chave)
-        # Tenta aguardar o bot estar pronto
-        if discord_loop is None:
-            print("Loop do Discord não disponível, aguardando bot_ready_event...")
-            bot_ready_event.wait(timeout=10)
-        if discord_loop is not None:
-            asyncio.run_coroutine_threadsafe(schedule_embed(), discord_loop)
-        else:
-            print("Loop do Discord ainda não disponível, embed não enviado. Armazenando para envio posterior.")
-            pending_embeds.append((session_id, tipo, chave))
+        asyncio.run_coroutine_threadsafe(schedule_embed(), discord_loop)
 
     return jsonify({"status": "success"}), 200
 
 @app.route("/sucesso", methods=["GET"])
 def sucesso():
+    """
+    Retorna uma página HTML personalizada com os detalhes do pagamento (chave, tipo, etc).
+    Essa página é exibida após a compra e espera o parâmetro "session_id" na URL.
+    """
     session_id = request.args.get("session_id")
     if not session_id:
         return "<h1>Erro:</h1><p>session_id é necessário.</p>", 400
@@ -344,5 +329,11 @@ def start_discord_bot():
     bot.run(DISCORD_BOT_TOKEN)
 
 if __name__ == '__main__':
-    threading.Thread(target=start_discord_bot, daemon=True).start()
+    # Inicia o bot do Discord em uma thread separada
+    discord_thread = threading.Thread(target=start_discord_bot, daemon=True)
+    discord_thread.start()
+    print("Aguardando o bot do Discord estar pronto...")
+    # Aguarda até que o bot esteja pronto antes de iniciar o Flask
+    bot_ready_event.wait()
+    print("Bot do Discord pronto. Iniciando o servidor Flask.")
     app.run(host="0.0.0.0")
