@@ -17,6 +17,8 @@ import asyncio
 
 load_dotenv()
 
+bot_ready_event = threading.Event()
+
 app = Flask(__name__)
 
 # --- Variáveis de Ambiente ---
