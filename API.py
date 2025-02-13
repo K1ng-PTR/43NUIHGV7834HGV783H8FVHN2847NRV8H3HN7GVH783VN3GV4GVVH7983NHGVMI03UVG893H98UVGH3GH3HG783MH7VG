@@ -7,8 +7,6 @@ from datetime import timedelta
 from flask import Flask, request, jsonify
 import stripe
 import requests
-import discord
-from discord.ext import commands
 import threading
 import asyncio
 
@@ -32,14 +30,6 @@ STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
-DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
-if not DISCORD_BOT_TOKEN:
-    raise Exception("DISCORD_BOT_TOKEN é necessário.")
-
-DISCORD_CHANNEL_ID = os.environ.get("DISCORD_CHANNEL_ID")
-if not DISCORD_CHANNEL_ID:
-    raise Exception("DISCORD_CHANNEL_ID é necessário.")
-
 # --- Links de Checkout Estáticos ---
 LINK_USO_UNICO = "https://buy.stripe.com/test_6oE9E70jrdL47cseV7"
 LINK_LIFETIME  = "https://buy.stripe.com/test_8wM2bF1nv0YiaoEbIU"
@@ -55,48 +45,6 @@ def generate_key():
         group = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
         groups.append(group)
     return '-'.join(groups)
-
-# Lista para armazenar embeds pendentes
-pending_embeds = []
-
-# --- Configuração do Bot do Discord ---
-intents = discord.Intents.default()
-intents.messages = True
-intents.guilds = True
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-# Global para armazenar o loop do Discord
-discord_loop = None
-
-@bot.event
-async def on_ready():
-    global discord_loop
-    discord_loop = asyncio.get_running_loop()
-    print(f"Bot {bot.user} conectado ao Discord!")
-    bot_ready_event.set()
-    # Envia quaisquer embeds pendentes
-    if pending_embeds:
-        for session_id, tipo, chave in pending_embeds:
-            try:
-                await send_discord_embed(session_id, tipo, chave)
-            except Exception as e:
-                print(f"Erro ao enviar embed pendente: {e}")
-        pending_embeds.clear()
-
-async def send_discord_embed(session_id, tipo, chave):
-    """Envia um embed com as informações do pagamento para o canal configurado."""
-    channel = bot.get_channel(int(DISCORD_CHANNEL_ID))
-    if channel:
-        embed = discord.Embed(
-            title="Pagamento Finalizado",
-            description=f"Session ID: {session_id}",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="Tipo de Compra", value=tipo, inline=False)
-        embed.add_field(name="Chave Gerada", value=chave, inline=False)
-        await channel.send(embed=embed)
-    else:
-        print("Canal Discord não encontrado.")
 
 # --- Endpoints da API ---
 
@@ -135,6 +83,43 @@ def gerar_multiplo(quantidade):
             "expire_at": expire_at.isoformat() if expire_at else None
         })
     return jsonify({"chaves": chaves_geradas}), 200
+
+@app.route('/buys', methods=['POST'])
+def handle_buys():
+    """
+    Processa o webhook da Stripe para compras, gerando uma chave e associando à sessão de pagamento.
+    """
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get("Stripe-Signature")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
+    except stripe.error.SignatureVerificationError:
+        return jsonify({"error": "Assinatura inválida"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        metadata = session.get("metadata", {})
+        checkout_link = metadata.get("checkout_link", "")
+        
+        tipo = "LifeTime" if checkout_link == LINK_LIFETIME else "Uso Único"
+        now_dt = datetime.datetime.now()
+        expire_at = now_dt + timedelta(days=1) if tipo == "Uso Único" else None
+        chave = generate_key()
+        
+        keys_data[chave] = {
+            "tipo": tipo,
+            "generated": now_dt.isoformat(),
+            "expire_at": expire_at.isoformat() if expire_at else None,
+            "used": False
+        }
+
+        session_id = session.get("id")
+        session_keys[session_id] = chave
+        return jsonify({"status": "success", "session_id": session_id, "chave": chave}), 200
+
+    return jsonify({"status": "ignored"}), 200
 
 @app.route('/validation', methods=['POST'])
 def validate():
@@ -222,19 +207,6 @@ def stripe_webhook():
         session_id = session.get("id")
         session_keys[session_id] = chave
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
-
-        # Função para enviar o embed
-        async def schedule_embed():
-            await send_discord_embed(session_id, tipo, chave)
-
-        # Se o loop do Discord não estiver disponível, armazena para envio posterior
-        if discord_loop is None:
-            print("Loop do Discord não disponível, armazenando embed para envio posterior.")
-            pending_embeds.append((session_id, tipo, chave))
-        else:
-            asyncio.run_coroutine_threadsafe(schedule_embed(), discord_loop)
-
-    return jsonify({"status": "success"}), 200
 
 @app.route("/sucesso", methods=["GET"])
 def sucesso():
@@ -342,15 +314,5 @@ def sucesso():
     """
     return html
 
-def start_discord_bot():
-    bot.run(DISCORD_BOT_TOKEN)
-
 if __name__ == '__main__':
-    # Inicia o bot do Discord em uma thread separada
-    discord_thread = threading.Thread(target=start_discord_bot, daemon=True)
-    discord_thread.start()
-    print("Aguardando o bot do Discord estar pronto...")
-    # Aguarda até que o bot esteja pronto antes de iniciar o Flask
-    bot_ready_event.wait()
-    print("Bot do Discord pronto. Iniciando o servidor Flask.")
     app.run(host="0.0.0.0")
