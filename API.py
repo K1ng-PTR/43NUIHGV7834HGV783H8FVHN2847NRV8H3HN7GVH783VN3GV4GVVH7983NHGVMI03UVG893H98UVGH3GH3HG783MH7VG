@@ -56,6 +56,9 @@ def generate_key():
         groups.append(group)
     return '-'.join(groups)
 
+# Lista para armazenar embeds pendentes
+pending_embeds = []
+
 # --- Configuração do Bot do Discord ---
 intents = discord.Intents.default()
 intents.messages = True
@@ -71,6 +74,14 @@ async def on_ready():
     discord_loop = asyncio.get_running_loop()
     print(f"Bot {bot.user} conectado ao Discord!")
     bot_ready_event.set()
+    # Se houver embeds pendentes, envia-os agora
+    if pending_embeds:
+        for session_id, tipo, chave in pending_embeds:
+            try:
+                await send_discord_embed(session_id, tipo, chave)
+            except Exception as e:
+                print(f"Erro ao enviar embed pendente: {e}")
+        pending_embeds.clear()
 
 async def send_discord_embed(session_id, tipo, chave):
     """Envia um embed com as informações do pagamento para o canal configurado."""
@@ -166,8 +177,8 @@ def index():
 def stripe_webhook():
     """
     Processa o webhook da Stripe.
-    Em vez de depender do URL da sessão, identifica o tipo de compra pelo metadado "checkout_link".
-    Em seguida, gera a chave e agenda o envio de um embed via Discord com as informações do pagamento.
+    Identifica o tipo de compra pelo metadado "checkout_link", gera a chave
+    e agenda o envio de um embed via Discord com as informações do pagamento.
     """
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
@@ -215,13 +226,15 @@ def stripe_webhook():
         # Agenda o envio do embed para o Discord
         async def schedule_embed():
             await send_discord_embed(session_id, tipo, chave)
+        # Tenta aguardar o bot estar pronto
         if discord_loop is None:
             print("Loop do Discord não disponível, aguardando bot_ready_event...")
             bot_ready_event.wait(timeout=10)
         if discord_loop is not None:
             asyncio.run_coroutine_threadsafe(schedule_embed(), discord_loop)
         else:
-            print("Loop do Discord ainda não disponível, embed não enviado.")
+            print("Loop do Discord ainda não disponível, embed não enviado. Armazenando para envio posterior.")
+            pending_embeds.append((session_id, tipo, chave))
 
     return jsonify({"status": "success"}), 200
 
