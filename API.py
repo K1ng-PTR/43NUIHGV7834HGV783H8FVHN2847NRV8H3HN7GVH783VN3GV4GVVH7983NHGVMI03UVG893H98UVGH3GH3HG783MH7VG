@@ -43,7 +43,6 @@ def generate_key():
         groups.append(group)
     return '-'.join(groups)
 
-# Endpoint para gerar múltiplas chaves manualmente
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
     if quantidade < 1 or quantidade > 300:
@@ -76,7 +75,6 @@ def gerar_multiplo(quantidade):
         })
     return jsonify({"chaves": chaves_geradas}), 200
 
-# Endpoint GET para que o Bot possa buscar as compras pendentes
 @app.route('/buys', methods=['GET'])
 def get_buys():
     global pending_buys
@@ -84,7 +82,6 @@ def get_buys():
     pending_buys.clear()  # Limpa as compras após repassá-las ao Bot
     return jsonify(compras), 200
 
-# Endpoint para validar uma chave
 @app.route('/validation', methods=['POST'])
 def validate():
     data = request.get_json()
@@ -118,7 +115,6 @@ def ping():
 def index():
     return jsonify({"message": "API de chaves rodando."}), 200
 
-# Endpoint para processar o webhook da Stripe e armazenar a compra
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.get_data(as_text=True)
@@ -169,6 +165,8 @@ def stripe_webhook():
             "comprador": session.get("customer_details", {}).get("email", "N/A"),
             "tipo_chave": tipo,
             "chave": chave,
+            "id_compra": session.get("id", "N/A"),
+            "preco": session.get("amount_total", "N/A"),
             "checkout_url": checkout_link
         }
         pending_buys.append(compra)
@@ -271,7 +269,7 @@ def sucesso():
         <p>Tipo de compra: <strong>{detalhes["tipo"]}</strong></p>
         <p>Sua chave de licença:</p>
         <div class="key">{chave}</div>
-        <p>Session ID: {session_id}</p>
+        <p>ID da Compra: {id_compra}</p>
         <p>{ "Validade: " + detalhes["expire_at"] if detalhes["expire_at"] else "Sem expiração" }</p>
       </div>
     </body>
