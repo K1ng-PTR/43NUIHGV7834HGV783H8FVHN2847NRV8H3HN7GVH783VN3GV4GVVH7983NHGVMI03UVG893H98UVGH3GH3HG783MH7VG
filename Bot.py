@@ -5,18 +5,18 @@ import threading
 import os
 from flask import Flask
 
-# 🔧 Configurações do bot
+# 🔧 Configurações do Bot
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Token do bot nas variáveis de ambiente
-CHANNEL_ID = 1339675439987298334  # ID do canal (como int)
-API_URL = "https://api-cjng.onrender.com/buys"  # Endpoint para buscar compras
+CHANNEL_ID = 1339675439987298334        # ID do canal (como int)
+API_URL = "https://api-cjng.onrender.com/buys"  # Endpoint para buscar as compras
 
 if not TOKEN:
     raise ValueError("⚠️ ERRO: O token do bot do Discord não foi definido! Verifique as variáveis de ambiente.")
 
-# Configuração do Flask (para status, se necessário)
+# Configuração do Flask para status (se necessário)
 app = Flask(__name__)
 
-# Configuração do Discord
+# Configuração do bot do Discord
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 
@@ -43,12 +43,15 @@ async def send_buys():
     while not client.is_closed():
         buys = await fetch_buys()
         for buy in buys:
-        embed = discord.Embed(title="🛒 Nova Compra Confirmada!", color=discord.Color.green())
-        embed.add_field(name="👤 Comprador", value=buy.get("comprador", "N/A"), inline=False)
-        embed.add_field(name="🔑 Tipo de Chave", value=buy.get("tipo_chave", "N/A"), inline=False)
-        embed.add_field(name="🔐 Chave Gerada", value=buy.get("chave", "N/A"), inline=False)
-        embed.add_field(name="💳 ID da compra", value=buy.get("id_compra", "N/A"), inline=False)
-        embed.add_field(name="💲Preço", value=buy.get("preco", "N/A"), inline=False)
+            embed = discord.Embed(
+                title="🛒 Nova Compra Confirmada!", 
+                color=discord.Color.green()
+            )
+            embed.add_field(name="👤 Comprador", value=buy.get("comprador", "N/A"), inline=False)
+            embed.add_field(name="🔑 Tipo de Chave", value=buy.get("tipo_chave", "N/A"), inline=False)
+            embed.add_field(name="🔐 Chave Gerada", value=buy.get("chave", "N/A"), inline=False)
+            embed.add_field(name="💳 ID da compra", value=buy.get("id_compra", "N/A"), inline=False)
+            embed.add_field(name="💲Preço", value=buy.get("preco", "N/A"), inline=False)
             await channel.send(embed=embed)
         await asyncio.sleep(30)  # Consulta a cada 30 segundos
 
@@ -57,7 +60,6 @@ async def on_ready():
     print(f'✅ Bot conectado como {client.user}')
     client.loop.create_task(send_buys())
 
-# Rota simples do Flask para verificar o status do bot
 @app.route('/')
 def home():
     return "✅ Bot do Discord está rodando!"
