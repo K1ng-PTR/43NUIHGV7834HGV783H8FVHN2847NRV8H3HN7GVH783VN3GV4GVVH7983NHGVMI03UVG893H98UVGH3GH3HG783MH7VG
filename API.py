@@ -274,7 +274,8 @@ def sucesso():
         <p>Tipo de compra: <strong>{detalhes["tipo"]}</strong></p>
         <p>Sua chave de licença:</p>
         <div class="key">{chave}</div>
-        <p>ID da Compra: {id_compra}</p>
+        <!-- O style abaixo força a quebra de linha para o ID da compra -->
+        <p style="word-break: break-all;">ID da Compra: {id_compra}</p>
         <p>{ "Validade: " + detalhes["expire_at"] if detalhes["expire_at"] else "Sem expiração" }</p>
       </div>
     </body>
