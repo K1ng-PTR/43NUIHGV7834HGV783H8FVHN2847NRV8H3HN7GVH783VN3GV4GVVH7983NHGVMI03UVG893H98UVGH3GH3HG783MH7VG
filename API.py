@@ -269,14 +269,14 @@ def sucesso():
             <path fill="none" stroke="#4caf50" stroke-width="5" d="M14 27l7 7 16-16"/>
           </svg>
         </div>
-        <h1>Pagamento Confirmado!</h1>
-        <p>Obrigado por sua compra. Seu pagamento foi realizado com sucesso e sua licença é 100% autêntica.</p>
-        <p>Tipo de compra: <strong>{detalhes["tipo"]}</strong></p>
-        <p>Sua chave de licença:</p>
+        <h1>Payment Confirmed!</h1>
+        <p>Thank you for your purchase. Your payment has been processed successfully and your license is 100% valid and secure.</p>
+        <p>Type of purchase: <strong>{detalhes["tipo"]}</strong></p>
+        <p>Your license key:</p>
         <div class="key">{chave}</div>
-        <p><strong>ID da Compra:</strong></p>
+        <p><strong>Purchase ID:</strong></p>
         <p style="word-break: break-all; text-align: center;">{id_compra}</p>
-        <p>{ "Validade: " + detalhes["expire_at"] if detalhes["expire_at"] else "Sem expiração" }</p>
+        <p>{ "Validade: " + detalhes["expire_at"] if detalhes["expire_at"] else "Permanent" }</p>
       </div>
     </body>
     </html>
