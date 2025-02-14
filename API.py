@@ -32,7 +32,7 @@ LINK_LIFETIME  = "https://buy.stripe.com/test_8wM2bF1nv0YiaoEbIU"
 
 # --- Armazenamento das Chaves e Compras ---
 keys_data = {}      # Mapeia a chave gerada para seus detalhes.
-session_keys = {}   # Mapeia o session_id da Stripe para a chave gerada.
+session_keys = {}   # Mapeia o session_id da Stripe para um dicionário com a chave gerada e o ID da compra.
 pending_buys = []   # Armazena as compras que ainda não foram enviadas para o Bot.
 
 def generate_key():
@@ -155,9 +155,12 @@ def stripe_webhook():
         }
         keys_data[chave] = chave_data
 
-        # Associa o session_id à chave gerada
+        # Associa o session_id à chave gerada e guarda também o ID da compra
         session_id = session.get("id")
-        session_keys[session_id] = chave
+        session_keys[session_id] = {
+            "chave": chave,
+            "id_compra": session.get("id", "N/A")
+        }
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
         # Armazena as informações da compra para que o Bot envie para o Discord
@@ -180,9 +183,11 @@ def sucesso():
     session_id = request.args.get("session_id")
     if not session_id:
         return "<h1>Erro:</h1><p>session_id é necessário.</p>", 400
-    chave = session_keys.get(session_id)
-    if not chave:
+    data = session_keys.get(session_id)
+    if not data:
         return "<h1>Erro:</h1><p>Chave não encontrada para a sessão fornecida.</p>", 404
+    chave = data["chave"]
+    id_compra = data["id_compra"]
     detalhes = keys_data.get(chave)
     if not detalhes:
         return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
