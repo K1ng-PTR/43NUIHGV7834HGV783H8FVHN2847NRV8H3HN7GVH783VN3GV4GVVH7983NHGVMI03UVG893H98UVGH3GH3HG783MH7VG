@@ -51,7 +51,6 @@ async def send_buys():
             embed.add_field(name="🔑 Tipo de Chave", value=buy.get("tipo_chave", "N/A"), inline=False)
             embed.add_field(name="🔐 Chave Gerada", value=buy.get("chave", "N/A"), inline=False)
             embed.add_field(name="💳 ID da compra", value=buy.get("id_compra", "N/A"), inline=False)
-            embed.add_field(name="💲Preço", value=buy.get("preco", "N/A"), inline=False)
             await channel.send(embed=embed)
         await asyncio.sleep(30)  # Consulta a cada 30 segundos
 
