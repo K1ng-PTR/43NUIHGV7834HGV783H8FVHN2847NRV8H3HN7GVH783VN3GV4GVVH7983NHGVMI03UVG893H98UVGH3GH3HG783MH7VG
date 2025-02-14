@@ -43,11 +43,12 @@ async def send_buys():
     while not client.is_closed():
         buys = await fetch_buys()
         for buy in buys:
-            embed = discord.Embed(title="🛒 Nova Compra Confirmada!", color=discord.Color.green())
-            embed.add_field(name="👤 Comprador", value=buy.get("comprador", "N/A"), inline=False)
-            embed.add_field(name="🔑 Tipo de Chave", value=buy.get("tipo_chave", "N/A"), inline=False)
-            embed.add_field(name="🔐 Chave Gerada", value=buy.get("chave", "N/A"), inline=False)
-            embed.add_field(name="💳 Checkout URL", value=buy.get("checkout_url", "N/A"), inline=False)
+        embed = discord.Embed(title="🛒 Nova Compra Confirmada!", color=discord.Color.green())
+        embed.add_field(name="👤 Comprador", value=buy.get("comprador", "N/A"), inline=False)
+        embed.add_field(name="🔑 Tipo de Chave", value=buy.get("tipo_chave", "N/A"), inline=False)
+        embed.add_field(name="🔐 Chave Gerada", value=buy.get("chave", "N/A"), inline=False)
+        embed.add_field(name="💳 ID da compra", value=buy.get("id_compra", "N/A"), inline=False)
+        embed.add_field(name="💲Preço", value=buy.get("preco", "N/A"), inline=False)
             await channel.send(embed=embed)
         await asyncio.sleep(30)  # Consulta a cada 30 segundos
 
