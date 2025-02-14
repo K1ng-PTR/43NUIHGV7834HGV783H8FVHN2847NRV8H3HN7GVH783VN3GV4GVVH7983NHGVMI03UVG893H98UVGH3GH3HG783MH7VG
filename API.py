@@ -6,14 +6,10 @@ import datetime
 from datetime import timedelta
 from flask import Flask, request, jsonify
 import stripe
-import requests
 import threading
 import asyncio
 
 load_dotenv()
-
-# Evento para sinalizar que o bot está pronto
-bot_ready_event = threading.Event()
 
 app = Flask(__name__)
 
@@ -34,9 +30,10 @@ if STRIPE_SECRET_KEY:
 LINK_USO_UNICO = "https://buy.stripe.com/test_6oE9E70jrdL47cseV7"
 LINK_LIFETIME  = "https://buy.stripe.com/test_8wM2bF1nv0YiaoEbIU"
 
-# --- Armazenamento das Chaves ---
+# --- Armazenamento das Chaves e Compras ---
 keys_data = {}      # Mapeia a chave gerada para seus detalhes.
 session_keys = {}   # Mapeia o session_id da Stripe para a chave gerada.
+pending_buys = []   # Armazena as compras que ainda não foram enviadas para o Bot.
 
 def generate_key():
     """Gera uma chave no formato 'XXXXX-XXXXX-XXXXX-XXXXX'."""
@@ -46,14 +43,9 @@ def generate_key():
         groups.append(group)
     return '-'.join(groups)
 
-# --- Endpoints da API ---
-
+# Endpoint para gerar múltiplas chaves manualmente
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
-    """
-    Gera múltiplas chaves manualmente.
-    Requer header "X-Gen-Password" e JSON com "tipo": "Uso Único" ou "LifeTime".
-    """
     if quantidade < 1 or quantidade > 300:
         return jsonify({"error": "Quantidade deve ser entre 1 e 300."}), 400
     provided_password = request.headers.get("X-Gen-Password", "")
@@ -84,49 +76,17 @@ def gerar_multiplo(quantidade):
         })
     return jsonify({"chaves": chaves_geradas}), 200
 
-@app.route('/buys', methods=['POST'])
-def handle_buys():
-    """
-    Processa o webhook da Stripe para compras, gerando uma chave e associando à sessão de pagamento.
-    """
-    payload = request.get_data(as_text=True)
-    sig_header = request.headers.get("Stripe-Signature")
-    try:
-        event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
-    except stripe.error.SignatureVerificationError:
-        return jsonify({"error": "Assinatura inválida"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+# Endpoint GET para que o Bot possa buscar as compras pendentes
+@app.route('/buys', methods=['GET'])
+def get_buys():
+    global pending_buys
+    compras = pending_buys.copy()
+    pending_buys.clear()  # Limpa as compras após repassá-las ao Bot
+    return jsonify(compras), 200
 
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        metadata = session.get("metadata", {})
-        checkout_link = metadata.get("checkout_link", "")
-        
-        tipo = "LifeTime" if checkout_link == LINK_LIFETIME else "Uso Único"
-        now_dt = datetime.datetime.now()
-        expire_at = now_dt + timedelta(days=1) if tipo == "Uso Único" else None
-        chave = generate_key()
-        
-        keys_data[chave] = {
-            "tipo": tipo,
-            "generated": now_dt.isoformat(),
-            "expire_at": expire_at.isoformat() if expire_at else None,
-            "used": False
-        }
-
-        session_id = session.get("id")
-        session_keys[session_id] = chave
-        return jsonify({"status": "success", "session_id": session_id, "chave": chave}), 200
-
-    return jsonify({"status": "ignored"}), 200
-
+# Endpoint para validar uma chave
 @app.route('/validation', methods=['POST'])
 def validate():
-    """
-    Valida uma chave.
-    No JSON, informe: { "chave": "XXXXX-XXXXX-XXXXX-XXXXX" }.
-    """
     data = request.get_json()
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
@@ -158,13 +118,9 @@ def ping():
 def index():
     return jsonify({"message": "API de chaves rodando."}), 200
 
+# Endpoint para processar o webhook da Stripe e armazenar a compra
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
-    """
-    Processa o webhook da Stripe.
-    Identifica o tipo de compra pelo metadado "checkout_link", gera a chave
-    e envia um embed via Discord com as informações do pagamento.
-    """
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
     try:
@@ -208,12 +164,21 @@ def stripe_webhook():
         session_keys[session_id] = chave
         print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
 
+        # Armazena as informações da compra para que o Bot envie para o Discord
+        compra = {
+            "comprador": session.get("customer_details", {}).get("email", "N/A"),
+            "tipo_chave": tipo,
+            "chave": chave,
+            "checkout_url": checkout_link
+        }
+        pending_buys.append(compra)
+
+        return jsonify({"status": "success", "session_id": session_id, "chave": chave}), 200
+
+    return jsonify({"status": "ignored"}), 200
+
 @app.route("/sucesso", methods=["GET"])
 def sucesso():
-    """
-    Retorna uma página HTML personalizada com os detalhes do pagamento (chave, tipo, etc).
-    Essa página é exibida após a compra e espera o parâmetro "session_id" na URL.
-    """
     session_id = request.args.get("session_id")
     if not session_id:
         return "<h1>Erro:</h1><p>session_id é necessário.</p>", 400
