@@ -124,17 +124,21 @@ def validate():
     # Se a chave ainda não foi ativada, registra o HWID e gera o activation_id
     if not registro.get("hwid"):
         now_dt = datetime.datetime.now().isoformat()
-        # Gera o activation_id com o HWID recebido e a chave
+        # Gera o activation_id com a combinação do HWID recebido e da chave
         new_activation_id = generate_activation_id(hwid_request, chave)
         update_data = {"hwid": hwid_request, "activation_id": new_activation_id}
         if not registro.get("data_ativacao"):
             update_data["data_ativacao"] = now_dt
 
         update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
-        if update_res.error:
-            return jsonify({"error": "Erro ao atualizar HWID e activation_id", "details": update_res.error.message}), 500
-        
-        # Atualiza o registro localmente
+        # Verifica se há erro utilizando o método get, evitando o acesso ao atributo 'error'
+        if update_res.get("error"):
+            return jsonify({
+                "error": "Erro ao atualizar HWID e activation_id",
+                "details": update_res.get("error")
+            }), 500
+
+        # Atualiza os dados localmente
         registro["hwid"] = hwid_request
         registro["activation_id"] = new_activation_id
         if "data_ativacao" not in registro:
@@ -144,8 +148,8 @@ def validate():
         # Se já foi ativada, verifica se o HWID recebido é o mesmo
         if registro.get("hwid") != hwid_request:
             return jsonify({"valid": False, "message": "Chave já ativada em outro dispositivo."}), 400
-        
-        # Valida se o activation_id armazenado corresponde ao que se espera
+
+        # Valida se o activation_id armazenado corresponde à combinação esperada
         expected_activation_id = generate_activation_id(hwid_request, chave)
         if registro.get("activation_id") != expected_activation_id:
             return jsonify({"valid": False, "message": "Activation ID inválido para este dispositivo."}), 400
