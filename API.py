@@ -59,7 +59,7 @@ def generate_activation_id(hwid, chave):
     num = int(h, 16) % (10**22)
     return str(num).zfill(22)
 
-# === ENDPOINTS ORIGINAIS DA API (AGORA INTEGRADOS COM SUPABASE) ===
+# === ENDPOINTS DA API ===
 
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
@@ -85,8 +85,7 @@ def gerar_multiplo(quantidade):
             "chave": chave,
             "activation_id": activation_id,
             "data_ativacao": None,  # Será definida no momento da validação
-            "tipo": tipo,
-            "authorized": False  # Inicialmente não autorizado
+            "tipo": tipo
         }
         res = supabase.table("activations").insert(registro).execute()
         if res.error:
@@ -119,42 +118,7 @@ def validate():
 
     registro = res.data[0]
 
-    # --- FLUXO PARA REGISTRO AUTORIZADO PELO ADMIN ---
-    if registro.get("authorized"):
-        # Se ainda não recebeu o HWID (ou seja, a app ainda não enviou o ID gerado com a nova chave)
-        if not registro.get("hwid"):
-            now_dt = datetime.datetime.now().isoformat()
-            # Gera o activation_id usando a nova chave autorizada e o HWID enviado pela app
-            new_activation_id = generate_activation_id(hwid_request, chave)
-            update_data = {
-                "hwid": hwid_request,
-                "activation_id": new_activation_id,
-                "data_ativacao": now_dt
-            }
-            try:
-                update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
-                if not update_res.data:
-                    return jsonify({
-                        "error": "Erro ao atualizar registro",
-                        "details": "Dados não retornados"
-                    }), 500
-            except Exception as e:
-                print("Exceção ao atualizar registro:", e)
-                return jsonify({
-                    "error": "Erro ao atualizar registro",
-                    "details": str(e)
-                }), 500
-            registro.update(update_data)
-        return jsonify({
-            "valid": True,
-            "authorized": True,
-            "tipo": registro.get("tipo"),
-            "data_ativacao": registro.get("data_ativacao"),
-            "activation_id": registro.get("activation_id"),
-            "message": "Chave validada e autorizada com sucesso."
-        }), 200
-
-    # --- FLUXO PARA REGISTRO JÁ ATIVADO (sem autorização extra) ---
+    # Se a chave já foi ativada (ou seja, já possui um HWID registrado)
     if registro.get("hwid"):
         if registro.get("hwid") != hwid_request:
             return jsonify({
@@ -180,7 +144,7 @@ def validate():
             "message": "Chave validada com sucesso."
         }), 200
 
-    # --- FLUXO PARA PRIMEIRA ATIVAÇÃO (sem HWID e sem autorização extra) ---
+    # Fluxo para primeira ativação (sem HWID definido)
     now_dt = datetime.datetime.now().isoformat()
     new_activation_id = generate_activation_id(hwid_request, chave)
     update_data = {
@@ -242,7 +206,7 @@ def stripe_webhook():
         session = event["data"]["object"]
         metadata = session.get("metadata", {})
         checkout_link = metadata.get("checkout_link", "")
-        # Define o tipo com base no checkout_link (ajuste conforme sua lógica)
+        # Define o tipo conforme sua lógica
         tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/test_6oE9E70jrdL47cseV7" else "LifeTime"
         now_dt = datetime.datetime.now().isoformat()
         chave = generate_key()
@@ -263,7 +227,7 @@ def stripe_webhook():
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
 
         session_id = session.get("id")
-        # Armazena os dados da sessão para que a página de sucesso possa exibir a chave
+        # Armazena os dados da sessão para a página de sucesso
         session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/D")}
         compra = {
             "comprador": session.get("customer_details", {}).get("email", "N/D"),
@@ -409,14 +373,14 @@ DARK_TEMPLATE = """
                 <td>{{ r.hwid or "N/D" }}</td>
                 <td>{{ r.data_ativacao or "N/D" }}</td>
                 <td>
-                    {% if not r.authorized %}
+                    {% if r.hwid %}
                     <form method="post" action="{{ url_for('auth_hwid_authorize') }}">
                         <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
                         <input type="hidden" name="password" value="{{ admin_password }}">
                         <input type="submit" value="Autorizar">
                     </form>
                     {% else %}
-                        Autorizado
+                        N/D
                     {% endif %}
                 </td>
             </tr>
@@ -471,7 +435,7 @@ def auth_hwid_authorize():
     if not registro.get("hwid"):
         return "<h1>Ativação não iniciada. HWID não registrado.</h1>", 400
 
-    # Constrói a página HTML para informar que a autorização foi realizada com sucesso
+    # Constrói a página HTML informando que a autorização foi realizada com sucesso
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
