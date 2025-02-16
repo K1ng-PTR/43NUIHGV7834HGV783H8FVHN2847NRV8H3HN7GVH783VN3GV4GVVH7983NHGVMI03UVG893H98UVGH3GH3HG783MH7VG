@@ -107,13 +107,15 @@ def validate():
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
     chave = data.get("chave")
-    # Consulta o registro no Supabase pela chave
-    res = supabase.table("activations").select("*").eq("chave", chave).execute()
-    # Verifica se a consulta foi bem-sucedida com base no status_code
-    if res.status_code != 200:
-        return jsonify({"error": "Erro ao consultar o banco", "details": res.data}), 500
+    try:
+        # Consulta o registro no Supabase pela chave
+        res = supabase.table("activations").select("*").eq("chave", chave).execute()
+    except Exception as e:
+        return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
+
     if not res.data:
         return jsonify({"valid": False, "message": "Chave inválida."}), 400
+
     registro = res.data[0]
     return jsonify({
         "valid": True,
