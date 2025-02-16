@@ -472,7 +472,7 @@ def auth_hwid_authorize():
 
     registro = res.data[0]
 
-    # Verifica se o HWID já foi registrado (ou seja, a app já iniciou a ativação)
+    # Verifica se o HWID já foi registrado (indicando que a app já iniciou a ativação)
     if not registro.get("hwid"):
         return "<h1>Ativação não iniciada. HWID não registrado.</h1>", 400
 
