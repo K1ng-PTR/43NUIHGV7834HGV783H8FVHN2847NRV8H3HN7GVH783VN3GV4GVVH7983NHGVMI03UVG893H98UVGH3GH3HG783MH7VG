@@ -76,20 +76,18 @@ def gerar_multiplo(quantidade):
         return jsonify({"error": "Tipo inválido. Deve ser 'Uso Único' ou 'LifeTime'."}), 400
 
     chaves_geradas = []
-    now = datetime.datetime.now().isoformat()
+    # A data de ativação será definida somente na primeira validação
     for _ in range(quantidade):
         chave = generate_key()
-        # Como HWID ainda não está definido, usamos string vazia ("")
+        # Para chaves não ativadas, usamos HWID vazio e activation_id com HWID vazio
         activation_id = generate_activation_id("", chave)
-        # Monta o registro
         registro = {
-            "hwid": "",  # Ainda não ativado
+            "hwid": "",
             "chave": chave,
             "activation_id": activation_id,
-            "data_ativacao": now,
+            "data_ativacao": None,  # A data de ativação será atualizada no momento da validação
             "tipo": tipo
         }
-        # Insere o registro no Supabase
         res = supabase.table("activations").insert(registro).execute()
         if res.error:
             return jsonify({"error": "Erro ao inserir registro no banco", "details": res.error.message}), 500
@@ -97,7 +95,7 @@ def gerar_multiplo(quantidade):
             "chave": chave,
             "tipo": tipo,
             "activation_id": activation_id,
-            "data_ativacao": now
+            "data_ativacao": None
         })
     return jsonify({"chaves": chaves_geradas}), 200
 
@@ -111,7 +109,6 @@ def validate():
     hwid_request = data.get("hwid")
     
     try:
-        # Consulta o registro no Supabase pela chave
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
     except Exception as e:
         return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
@@ -121,24 +118,33 @@ def validate():
 
     registro = res.data[0]
 
-    # Se a chave já foi ativada (ou seja, já possui um HWID registrado)
+    # Se a chave já foi ativada, verificamos se o HWID bate
     if registro.get("hwid"):
-        # Calcula o activation_id esperado com base no HWID registrado e na chave
-        expected_activation_id = generate_activation_id(registro.get("hwid"), chave)
-        # Se o HWID enviado for diferente ou o activation_id não bater, retorna erro
-        if registro.get("hwid") != hwid_request or registro.get("activation_id") != expected_activation_id:
+        if registro.get("hwid") != hwid_request:
             return jsonify({
                 "valid": False,
                 "message": "Esta chave de ativação não foi registrada para este computador."
             }), 400
 
-        # Mesmo que o HWID e activation_id estejam corretos, a chave já foi ativada
-        return jsonify({
-            "valid": False,
-            "message": "Chave já ativada."
-        }), 400
+        # Para chaves de "Uso Único", verificamos a expiração com base na data de ativação registrada
+        if registro.get("tipo") == "Uso Único":
+            try:
+                activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
+            except Exception:
+                return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
+            expiration_date = activation_date + datetime.timedelta(days=1)
+            if datetime.datetime.now() > expiration_date:
+                return jsonify({"valid": False, "message": "Chave expirada."}), 400
 
-    # Se a chave ainda não foi ativada, registra o HWID e gera o activation_id
+        return jsonify({
+            "valid": True,
+            "tipo": registro.get("tipo"),
+            "data_ativacao": registro.get("data_ativacao"),
+            "activation_id": registro.get("activation_id"),
+            "message": "Chave validada com sucesso."
+        }), 200
+
+    # Se a chave ainda não foi ativada, atualizamos com o HWID fornecido e definimos a data de ativação
     now_dt = datetime.datetime.now().isoformat()
     new_activation_id = generate_activation_id(hwid_request, chave)
     update_data = {
@@ -155,17 +161,6 @@ def validate():
             }), 500
     except Exception as e:
         return jsonify({"error": "Erro ao atualizar registro", "details": str(e)}), 500
-
-    # Validação temporal para chaves do tipo "Uso Único"
-    if registro.get("tipo") == "Uso Único":
-        try:
-            activation_date = datetime.datetime.fromisoformat(now_dt)
-        except Exception:
-            return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
-
-        expiration_date = activation_date + datetime.timedelta(days=1)
-        if datetime.datetime.now() > expiration_date:
-            return jsonify({"valid": False, "message": "Chave expirada."}), 400
 
     return jsonify({
         "valid": True,
@@ -210,10 +205,10 @@ def stripe_webhook():
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
         registro = {
-            "hwid": "",  # Ainda não vinculado
+            "hwid": "",
             "chave": chave,
             "activation_id": activation_id,
-            "data_ativacao": now_dt,
+            "data_ativacao": None,
             "tipo": tipo
         }
         try:
@@ -221,12 +216,10 @@ def stripe_webhook():
         except Exception as e:
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": str(e)}), 500
 
-        # Verifica se a inserção retornou dados
         if not res.data:
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
 
         session_id = session.get("id")
-        # Armazenamos em memória para uso na página de sucesso (ou você pode salvar em outro lugar)
         session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/A")}
         compra = {
             "comprador": session.get("customer_details", {}).get("email", "N/D"),
@@ -250,7 +243,6 @@ def sucesso():
         return "<h1>Erro:</h1><p>Chave não encontrada para a sessão fornecida.</p>", 404
     chave = data["chave"]
     id_compra = data["id_compra"]
-    # Busca o registro de ativação correspondente à chave no Supabase
     res = supabase.table("activations").select("*").eq("chave", chave).execute()
     if not res.data:
         return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
@@ -316,7 +308,7 @@ def sucesso():
         <div class="key">{chave}</div>
         <p><strong>Purchase ID:</strong></p>
         <p>{id_compra}</p>
-        <p>Data de Ativação: <strong>{registro.get("data_ativacao")}</strong></p>
+        <p>Data de Ativação: <strong>{registro.get("data_ativacao") or "N/A"}</strong></p>
       </div>
     </body>
     </html>
@@ -371,7 +363,7 @@ DARK_TEMPLATE = """
                 <td>{{ r.chave }}</td>
                 <td>{{ r.tipo }}</td>
                 <td>{{ r.hwid or "N/D" }}</td>
-                <td>{{ r.data_ativacao }}</td>
+                <td>{{ r.data_ativacao or "N/D" }}</td>
                 <td>
                     <form method="post" action="{{ url_for('auth_hwid_authorize') }}">
                         <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
@@ -423,13 +415,13 @@ def auth_hwid_authorize():
     tipo = registro.get("tipo")
     nova_chave = generate_key()
     novo_activation_id = generate_activation_id("", nova_chave)
-    # Remove o registro antigo e insere o novo
     supabase.table("activations").delete().eq("activation_id", activation_id).execute()
     novo_registro = {
         "activation_id": novo_activation_id,
         "chave": nova_chave,
         "tipo": tipo,
-        "hwid": ""  # Ainda não definido; aguardará nova ativação
+        "hwid": "",
+        "data_ativacao": None
     }
     supabase.table("activations").insert(novo_registro).execute()
     response_html = f"""
