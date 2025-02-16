@@ -1,19 +1,20 @@
-from dotenv import load_dotenv
+#!/usr/bin/env python3
 import os
 import random
 import string
 import datetime
+import hashlib
+import sys
 from datetime import timedelta
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string, redirect, url_for
+from dotenv import load_dotenv
 import stripe
-import threading
-import asyncio
+from supabase import create_client, Client
 
 load_dotenv()
-
 app = Flask(__name__)
 
-# --- Variáveis de Ambiente ---
+# === VARIÁVEIS DE AMBIENTE ===
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
 if not SUPER_PASSWORD or len(SUPER_PASSWORD) != 500:
     raise Exception("GEN_PASSWORD deve ter exatamente 500 caracteres.")
@@ -26,15 +27,17 @@ STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
-# --- Links de Checkout Estáticos ---
-LINK_USO_UNICO = "https://buy.stripe.com/test_6oE9E70jrdL47cseV7"
-LINK_LIFETIME  = "https://buy.stripe.com/test_8wM2bF1nv0YiaoEbIU"
+# Senha administrativa para acessar o subsite /auth-hwid
+ADMIN_PASSWORD = "1U_eZAvFrH7IwI4yhVoiBr!4QMqh!ePKab.X4R1Am/xs0/kvxJ/uvb3.9HUHB1lhJ!XqTIGaH_pzV.KoJfyx/jwD8jc3Zh1n5ER.UKPqsYxfKTx5PJUGC4BTaq1RM3//8QfU5bJSfgzlDfXlF13Ql6BAgJ3KOLbsHi!.mt_U2oXao.Co_AwidbN9L.fj/Df_KUSHvlHfJD621OrQxsqP60-7HhdwqU6bQf/a4KaHcJD4Lk-mcAyOVkIsrJEgpswVMl-rY8cq5ZgONm4xKW2k!UPmPa1wqsxL!Mk-.ft/c-frL4R7WWYBiwvJiZ_WWHkQ_flgrWKAaCaovlNRKbl4unX.R1v_6av/vBJ-b-q/wMNBbTFgwvgHpso8xsDfwy7dCSPOAHJ7fmsDTBYKeY1Khj6B_Y.3_jjNJl5-GfIOS4MA/fsm7FlB0pdS3d/VTcU0iJad/DR9aGBux3DAaM/YNm/EtitvVgt9Yd!fu8-wya7HBrA7-pCi"
 
-# --- Armazenamento das Chaves e Compras ---
-keys_data = {}      # Mapeia a chave gerada para seus detalhes.
-session_keys = {}   # Mapeia o session_id da Stripe para um dicionário com a chave gerada e o ID da compra.
-pending_buys = []   # Armazena as compras que ainda não foram enviadas para o Bot.
+# Supabase
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise Exception("SUPABASE_URL e SUPABASE_KEY são necessários.")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# === FUNÇÕES AUXILIARES ===
 def generate_key():
     """Gera uma chave no formato 'XXXXX-XXXXX-XXXXX-XXXXX'."""
     groups = []
@@ -42,6 +45,20 @@ def generate_key():
         group = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
         groups.append(group)
     return '-'.join(groups)
+
+def generate_activation_id(hwid, chave):
+    """
+    Combina HWID e chave, aplica SHA256 e retorna um número de 22 dígitos.
+    Se o HWID estiver vazio, utiliza string vazia.
+    """
+    h = hashlib.sha256(f"{hwid}{chave}".encode()).hexdigest()
+    num = int(h, 16) % (10**22)
+    return str(num).zfill(22)
+
+# === ENDPOINTS ORIGINAIS DA API (AGORA INTEGRADOS COM SUPABASE) ===
+
+# OBSERVAÇÃO: Agora, em vez de armazenar em memória, usaremos a tabela "activations" no Supabase.
+# Como, no momento da geração, o HWID ainda não está associado, usaremos uma string vazia ("").
 
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
@@ -56,31 +73,32 @@ def gerar_multiplo(quantidade):
     tipo = data.get("tipo")
     if tipo not in ["Uso Único", "LifeTime"]:
         return jsonify({"error": "Tipo inválido. Deve ser 'Uso Único' ou 'LifeTime'."}), 400
+
     chaves_geradas = []
-    now = datetime.datetime.now()
+    now = datetime.datetime.now().isoformat()
     for _ in range(quantidade):
         chave = generate_key()
-        expire_at = now + timedelta(days=1) if tipo == "Uso Único" else None
-        chave_data = {
-            "tipo": tipo,
-            "generated": now.isoformat(),
-            "expire_at": expire_at.isoformat() if expire_at else None,
-            "used": False
+        # Como HWID ainda não está definido, usamos string vazia ("")
+        activation_id = generate_activation_id("", chave)
+        # Monta o registro
+        registro = {
+            "hwid": "",  # Ainda não ativado
+            "chave": chave,
+            "activation_id": activation_id,
+            "data_ativacao": now,
+            "tipo": tipo
         }
-        keys_data[chave] = chave_data
+        # Insere o registro no Supabase
+        res = supabase.table("activations").insert(registro).execute()
+        if res.error:
+            return jsonify({"error": "Erro ao inserir registro no banco", "details": res.error.message}), 500
         chaves_geradas.append({
             "chave": chave,
             "tipo": tipo,
-            "expire_at": expire_at.isoformat() if expire_at else None
+            "activation_id": activation_id,
+            "data_ativacao": now
         })
     return jsonify({"chaves": chaves_geradas}), 200
-
-@app.route('/buys', methods=['GET'])
-def get_buys():
-    global pending_buys
-    compras = pending_buys.copy()
-    pending_buys.clear()  # Limpa as compras após repassá-las ao Bot
-    return jsonify(compras), 200
 
 @app.route('/validation', methods=['POST'])
 def validate():
@@ -88,24 +106,29 @@ def validate():
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
     chave = data.get("chave")
-    registro = keys_data.get(chave)
-    if not registro:
+    # Consulta o registro no Supabase pela chave
+    res = supabase.table("activations").select("*").eq("chave", chave).execute()
+    if res.error:
+        return jsonify({"error": "Erro ao consultar o banco", "details": res.error.message}), 500
+    if not res.data:
         return jsonify({"valid": False, "message": "Chave inválida."}), 400
-    now = datetime.datetime.now()
-    if registro["expire_at"]:
-        expire_at = datetime.datetime.fromisoformat(registro["expire_at"])
-        if now > expire_at:
-            keys_data.pop(chave, None)
-            return jsonify({"valid": False, "message": "Chave expirada."}), 400
-    if registro["used"]:
-        return jsonify({"valid": False, "message": "Chave já utilizada."}), 400
-    registro["used"] = True
+    registro = res.data[0]
+    # Para este exemplo, consideramos que se o registro existir, a chave é válida.
+    # (Você pode adicionar lógica de expiração ou de uso se desejar.)
     return jsonify({
         "valid": True,
-        "tipo": registro["tipo"],
-        "expire_at": registro["expire_at"] if registro["expire_at"] else "Sem expiração",
+        "tipo": registro.get("tipo"),
+        "data_ativacao": registro.get("data_ativacao"),
+        "activation_id": registro.get("activation_id"),
         "message": "Chave validada com sucesso."
     }), 200
+
+@app.route('/buys', methods=['GET'])
+def get_buys():
+    global pending_buys
+    compras = pending_buys.copy()
+    pending_buys.clear()
+    return jsonify(compras), 200
 
 @app.route('/ping', methods=['GET'])
 def ping():
@@ -128,44 +151,27 @@ def stripe_webhook():
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-
-        # Extrai o metadado "checkout_link" para identificar o tipo de compra
         metadata = session.get("metadata", {})
         checkout_link = metadata.get("checkout_link", "")
-        print(f"Checkout Link (metadata): {checkout_link}")
-
-        if checkout_link == LINK_USO_UNICO:
-            tipo = "Uso Único"
-        elif checkout_link == LINK_LIFETIME:
-            tipo = "LifeTime"
-        else:
-            tipo = "LifeTime"  # Valor padrão
-
-        print(f"Tipo de chave: {tipo}")
-
-        # Gerar a chave
-        now_dt = datetime.datetime.now()
-        expire_at = now_dt + timedelta(days=1) if tipo == "Uso Único" else None
+        tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/test_6oE9E70jrdL47cseV7" else "LifeTime"
+        now_dt = datetime.datetime.now().isoformat()
         chave = generate_key()
-        chave_data = {
-            "tipo": tipo,
-            "generated": now_dt.isoformat(),
-            "expire_at": expire_at.isoformat() if expire_at else None,
-            "used": False
-        }
-        keys_data[chave] = chave_data
-
-        # Associa o session_id à chave gerada e guarda também o ID da compra
-        session_id = session.get("id")
-        session_keys[session_id] = {
+        activation_id = generate_activation_id("", chave)
+        registro = {
+            "hwid": "",  # Ainda não vinculado
             "chave": chave,
-            "id_compra": session.get("id", "N/A")
+            "activation_id": activation_id,
+            "data_ativacao": now_dt,
+            "tipo": tipo
         }
-        print(f"Pagamento confirmado via Stripe. Session ID: {session_id}, Chave {tipo} gerada: {chave}")
-
-        # Armazena as informações da compra para que o Bot envie para o Discord
+        res = supabase.table("activations").insert(registro).execute()
+        if res.error:
+            return jsonify({"error": "Erro ao inserir registro via Stripe", "details": res.error.message}), 500
+        session_id = session.get("id")
+        # Armazenamos em memória para uso na página de sucesso (ou você pode salvar em outro lugar)
+        session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/A")}
         compra = {
-            "comprador": session.get("customer_details", {}).get("email", "N/A"),
+            "comprador": session.get("customer_details", {}).get("email", "N/D"),
             "tipo_chave": tipo,
             "chave": chave,
             "id_compra": session.get("id", "N/A"),
@@ -173,9 +179,7 @@ def stripe_webhook():
             "checkout_url": checkout_link
         }
         pending_buys.append(compra)
-
         return jsonify({"status": "success", "session_id": session_id, "chave": chave}), 200
-
     return jsonify({"status": "ignored"}), 200
 
 @app.route("/sucesso", methods=["GET"])
@@ -188,10 +192,11 @@ def sucesso():
         return "<h1>Erro:</h1><p>Chave não encontrada para a sessão fornecida.</p>", 404
     chave = data["chave"]
     id_compra = data["id_compra"]
-    detalhes = keys_data.get(chave)
-    if not detalhes:
+    # Busca o registro de ativação correspondente à chave no Supabase
+    res = supabase.table("activations").select("*").eq("chave", chave).execute()
+    if res.error or not res.data:
         return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
-
+    registro = res.data[0]
     html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -243,45 +248,157 @@ def sucesso():
           margin: 1rem 0;
           letter-spacing: 0.1rem;
         }}
-        .checkmark-container {{
-          margin: 0 auto 1rem;
-          width: 60px;
-          height: 60px;
-          animation: pop 0.6s ease-out;
-        }}
-        .checkmark {{
-          width: 100%;
-          height: 100%;
-          fill: #4caf50;
-        }}
-        @keyframes pop {{
-          0% {{ transform: scale(0); opacity: 0; }}
-          60% {{ transform: scale(1.2); opacity: 1; }}
-          100% {{ transform: scale(1); }}
-        }}
       </style>
     </head>
     <body>
       <div class="card">
-        <div class="checkmark-container">
-          <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-            <circle cx="26" cy="26" r="25" fill="none" stroke="#4caf50" stroke-width="2"/>
-            <path fill="none" stroke="#4caf50" stroke-width="5" d="M14 27l7 7 16-16"/>
-          </svg>
-        </div>
-        <h1>Payment Confirmed!</h1>
-        <p>Thank you for your purchase. Your payment has been processed successfully and your license is 100% valid and secure.</p>
-        <p>Type of purchase: <strong>{detalhes["tipo"]}</strong></p>
-        <p>Your license key:</p>
+        <h1>Pagamento Confirmado!</h1>
+        <p>Tipo de compra: <strong>{registro.get("tipo")}</strong></p>
+        <p>Sua chave:</p>
         <div class="key">{chave}</div>
         <p><strong>Purchase ID:</strong></p>
-        <p style="word-break: break-all; text-align: center;">{id_compra}</p>
-        <p>{ "Validade: " + detalhes["expire_at"] if detalhes["expire_at"] else "Permanent" }</p>
+        <p>{id_compra}</p>
+        <p>Data de Ativação: <strong>{registro.get("data_ativacao")}</strong></p>
       </div>
     </body>
     </html>
     """
     return html
+
+# === ENDPOINTS ADMINISTRATIVOS (/auth-hwid) ===
+
+DARK_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Administração - Auth HWID</title>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; }
+        .container { width: 90%; margin: auto; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+        th { background-color: #1e1e1e; }
+        tr:nth-child(even) { background-color: #1e1e1e; }
+        a.button { background-color: #EA5656; color: #fff; padding: 6px 12px; text-decoration: none; border-radius: 4px; }
+        .login-box { margin: 50px auto; width: 300px; padding: 20px; background-color: #1e1e1e; border-radius: 8px; }
+        input[type="password"] { width: 100%; padding: 8px; margin: 10px 0; }
+        input[type="submit"] { background-color: #EA5656; color: #fff; border: none; padding: 10px; width: 100%; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if not authenticated %}
+        <div class="login-box">
+            <h2>Admin Login</h2>
+            <form method="post" action="{{ url_for('auth_hwid') }}">
+                <input type="password" name="password" placeholder="Senha de Admin" required>
+                <input type="submit" value="Entrar">
+            </form>
+        </div>
+        {% else %}
+        <h1>Registros de Ativação</h1>
+        <table>
+            <tr>
+                <th>Activation ID</th>
+                <th>Chave</th>
+                <th>Tipo</th>
+                <th>HWID</th>
+                <th>Data de Ativação</th>
+                <th>Ação</th>
+            </tr>
+            {% for r in records %}
+            <tr>
+                <td>{{ r.activation_id }}</td>
+                <td>{{ r.chave }}</td>
+                <td>{{ r.tipo }}</td>
+                <td>{{ r.hwid or "N/D" }}</td>
+                <td>{{ r.data_ativacao }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('auth_hwid_authorize') }}">
+                        <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
+                        <input type="hidden" name="password" value="{{ admin_password }}">
+                        <input type="submit" value="Autorizar">
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+    </div>
+</body>
+</html>
+"""
+
+@app.route("/auth-hwid", methods=["GET", "POST"])
+def auth_hwid():
+    authenticated = False
+    admin_pass = None
+    if request.method == "POST":
+        admin_pass = request.form.get("password")
+        if admin_pass == ADMIN_PASSWORD:
+            authenticated = True
+        else:
+            return render_template_string(DARK_TEMPLATE, authenticated=False), 401
+    else:
+        admin_pass = request.args.get("password")
+        if admin_pass == ADMIN_PASSWORD:
+            authenticated = True
+    if not authenticated:
+        return render_template_string(DARK_TEMPLATE, authenticated=False)
+    result = supabase.table("activations").select("*").execute()
+    records = result.data if result.data else []
+    return render_template_string(DARK_TEMPLATE, authenticated=True, records=records, admin_password=ADMIN_PASSWORD)
+
+@app.route("/auth-hwid/authorize", methods=["POST"])
+def auth_hwid_authorize():
+    admin_pass = request.form.get("password")
+    if admin_pass != ADMIN_PASSWORD:
+        return "Acesso não autorizado", 401
+    activation_id = request.form.get("activation_id")
+    if not activation_id:
+        return "Activation ID não informado", 400
+    res = supabase.table("activations").select("*").eq("activation_id", activation_id).execute()
+    if not res.data:
+        return "Registro não encontrado", 404
+    registro = res.data[0]
+    tipo = registro.get("tipo")
+    nova_chave = generate_key()
+    novo_activation_id = generate_activation_id("", nova_chave)
+    # Remove o registro antigo e insere o novo
+    supabase.table("activations").delete().eq("activation_id", activation_id).execute()
+    novo_registro = {
+        "activation_id": novo_activation_id,
+        "chave": nova_chave,
+        "tipo": tipo,
+        "hwid": ""  # Ainda não definido; aguardará nova ativação
+    }
+    supabase.table("activations").insert(novo_registro).execute()
+    response_html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Autorização Realizada</title>
+        <style>
+            body {{ background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }}
+            .container {{ width: 80%; margin: auto; }}
+            a.button {{ background-color: #EA5656; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Autorização realizada com sucesso!</h1>
+            <p>O registro com Activation ID <strong>{activation_id}</strong> foi resetado.</p>
+            <p>Nova Chave: <strong>{nova_chave}</strong></p>
+            <p>Novo Activation ID: <strong>{novo_activation_id}</strong></p>
+            <p>Tipo: <strong>{tipo}</strong></p>
+            <a class="button" href="{url_for('auth_hwid')}?password={ADMIN_PASSWORD}">Voltar</a>
+        </div>
+    </body>
+    </html>
+    """
+    return response_html
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0")
