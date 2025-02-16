@@ -121,38 +121,46 @@ def validate():
 
     registro = res.data[0]
 
-    # Verifica se a chave já foi ativada em algum dispositivo
-    if registro.get("hwid"):
-        # Se já estiver ativada e for em outro PC, rejeita
-        if registro.get("hwid") != hwid_request:
-            return jsonify({"valid": False, "message": "Chave já ativada em outro dispositivo."}), 400
-    else:
-        # Primeira ativação: atualiza o registro com o HWID recebido
+    # Se a chave ainda não foi ativada, registra o HWID e gera o activation_id
+    if not registro.get("hwid"):
         now_dt = datetime.datetime.now().isoformat()
-        update_data = {"hwid": hwid_request}
+        # Gera o activation_id com o HWID recebido e a chave
+        new_activation_id = generate_activation_id(hwid_request, chave)
+        update_data = {"hwid": hwid_request, "activation_id": new_activation_id}
         if not registro.get("data_ativacao"):
             update_data["data_ativacao"] = now_dt
+
         update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
         if update_res.error:
-            return jsonify({"error": "Erro ao atualizar HWID", "details": update_res.error.message}), 500
+            return jsonify({"error": "Erro ao atualizar HWID e activation_id", "details": update_res.error.message}), 500
         
-        # Atualiza os dados localmente para as próximas verificações
+        # Atualiza o registro localmente
         registro["hwid"] = hwid_request
+        registro["activation_id"] = new_activation_id
         if "data_ativacao" not in registro:
             registro["data_ativacao"] = now_dt
 
-    # Verifica a validade temporal para chaves do tipo "Uso Único"
+    else:
+        # Se já foi ativada, verifica se o HWID recebido é o mesmo
+        if registro.get("hwid") != hwid_request:
+            return jsonify({"valid": False, "message": "Chave já ativada em outro dispositivo."}), 400
+        
+        # Valida se o activation_id armazenado corresponde ao que se espera
+        expected_activation_id = generate_activation_id(hwid_request, chave)
+        if registro.get("activation_id") != expected_activation_id:
+            return jsonify({"valid": False, "message": "Activation ID inválido para este dispositivo."}), 400
+
+    # Validação de tempo para chaves do tipo "Uso Único"
     if registro.get("tipo") == "Uso Único":
         try:
             activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
-        except Exception as e:
+        except Exception:
             return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
 
         expiration_date = activation_date + datetime.timedelta(days=1)
         if datetime.datetime.now() > expiration_date:
             return jsonify({"valid": False, "message": "Chave expirada."}), 400
 
-    # Se passou em todas as verificações, retorna sucesso
     return jsonify({
         "valid": True,
         "tipo": registro.get("tipo"),
