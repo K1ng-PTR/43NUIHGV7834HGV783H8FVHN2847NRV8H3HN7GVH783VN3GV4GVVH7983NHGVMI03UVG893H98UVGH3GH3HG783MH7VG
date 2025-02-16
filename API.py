@@ -234,12 +234,15 @@ def stripe_webhook():
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
     except stripe.error.SignatureVerificationError as e:
+        print("Erro de verificação de assinatura:", e)
         return jsonify({"error": "Assinatura inválida"}), 400
     except Exception as e:
+        print("Erro ao construir evento do Stripe:", e)
         return jsonify({"error": str(e)}), 400
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
+        print("Evento checkout.session.completed recebido:", session)
         metadata = session.get("metadata", {})
         checkout_link = metadata.get("checkout_link", "")
         tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/test_6oE9E70jrdL47cseV7" else "LifeTime"
@@ -256,10 +259,13 @@ def stripe_webhook():
         }
         try:
             res = supabase.table("activations").insert(registro).execute()
+            print("Inserção no Supabase:", res.data)
         except Exception as e:
+            print("Erro ao inserir registro via Stripe:", e)
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": str(e)}), 500
 
         if not res.data:
+            print("Erro: Dados não retornados na inserção.")
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
 
         session_id = session.get("id")
