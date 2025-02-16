@@ -37,6 +37,10 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     raise Exception("SUPABASE_URL e SUPABASE_KEY são necessários.")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Variáveis globais para armazenar compras e sessões pendentes
+pending_buys = []
+session_keys = {}
+
 # === FUNÇÕES AUXILIARES ===
 def generate_key():
     """Gera uma chave no formato 'XXXXX-XXXXX-XXXXX-XXXXX'."""
@@ -56,9 +60,6 @@ def generate_activation_id(hwid, chave):
     return str(num).zfill(22)
 
 # === ENDPOINTS ORIGINAIS DA API (AGORA INTEGRADOS COM SUPABASE) ===
-
-# OBSERVAÇÃO: Agora, em vez de armazenar em memória, usaremos a tabela "activations" no Supabase.
-# Como, no momento da geração, o HWID ainda não está associado, usaremos uma string vazia ("").
 
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
 def gerar_multiplo(quantidade):
