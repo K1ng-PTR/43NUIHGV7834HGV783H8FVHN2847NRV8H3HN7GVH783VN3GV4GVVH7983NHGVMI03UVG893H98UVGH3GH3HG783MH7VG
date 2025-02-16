@@ -106,7 +106,10 @@ def validate():
     data = request.get_json()
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
+
     chave = data.get("chave")
+    hwid_request = data.get("hwid", "")
+    
     try:
         # Consulta o registro no Supabase pela chave
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
@@ -117,6 +120,39 @@ def validate():
         return jsonify({"valid": False, "message": "Chave inválida."}), 400
 
     registro = res.data[0]
+
+    # Verifica se a chave já foi ativada em algum dispositivo
+    if registro.get("hwid"):
+        # Se já estiver ativada e for em outro PC, rejeita
+        if registro.get("hwid") != hwid_request:
+            return jsonify({"valid": False, "message": "Chave já ativada em outro dispositivo."}), 400
+    else:
+        # Primeira ativação: atualiza o registro com o HWID recebido
+        now_dt = datetime.datetime.now().isoformat()
+        update_data = {"hwid": hwid_request}
+        if not registro.get("data_ativacao"):
+            update_data["data_ativacao"] = now_dt
+        update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
+        if update_res.error:
+            return jsonify({"error": "Erro ao atualizar HWID", "details": update_res.error.message}), 500
+        
+        # Atualiza os dados localmente para as próximas verificações
+        registro["hwid"] = hwid_request
+        if "data_ativacao" not in registro:
+            registro["data_ativacao"] = now_dt
+
+    # Verifica a validade temporal para chaves do tipo "Uso Único"
+    if registro.get("tipo") == "Uso Único":
+        try:
+            activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
+        except Exception as e:
+            return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
+
+        expiration_date = activation_date + datetime.timedelta(days=1)
+        if datetime.datetime.now() > expiration_date:
+            return jsonify({"valid": False, "message": "Chave expirada."}), 400
+
+    # Se passou em todas as verificações, retorna sucesso
     return jsonify({
         "valid": True,
         "tipo": registro.get("tipo"),
