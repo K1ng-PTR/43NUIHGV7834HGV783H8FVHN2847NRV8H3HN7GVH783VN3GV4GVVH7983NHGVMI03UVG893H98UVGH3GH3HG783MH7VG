@@ -109,13 +109,12 @@ def validate():
     chave = data.get("chave")
     # Consulta o registro no Supabase pela chave
     res = supabase.table("activations").select("*").eq("chave", chave).execute()
-    if res.error:
-        return jsonify({"error": "Erro ao consultar o banco", "details": res.error.message}), 500
+    # Verifica se a consulta foi bem-sucedida com base no status_code
+    if res.status_code != 200:
+        return jsonify({"error": "Erro ao consultar o banco", "details": res.data}), 500
     if not res.data:
         return jsonify({"valid": False, "message": "Chave inválida."}), 400
     registro = res.data[0]
-    # Para este exemplo, consideramos que se o registro existir, a chave é válida.
-    # (Você pode adicionar lógica de expiração ou de uso se desejar.)
     return jsonify({
         "valid": True,
         "tipo": registro.get("tipo"),
