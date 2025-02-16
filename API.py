@@ -166,9 +166,15 @@ def stripe_webhook():
             "data_ativacao": now_dt,
             "tipo": tipo
         }
-        res = supabase.table("activations").insert(registro).execute()
-        if res.error:
-            return jsonify({"error": "Erro ao inserir registro via Stripe", "details": res.error.message}), 500
+        try:
+            res = supabase.table("activations").insert(registro).execute()
+        except Exception as e:
+            return jsonify({"error": "Erro ao inserir registro via Stripe", "details": str(e)}), 500
+
+        # Verifica se a inserção retornou dados
+        if not res.data:
+            return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
+
         session_id = session.get("id")
         # Armazenamos em memória para uso na página de sucesso (ou você pode salvar em outro lugar)
         session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/A")}
