@@ -378,41 +378,67 @@ def sucesso():
 
 DARK_TEMPLATE = """
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <title>Autenticação HWID</title>
+    <meta charset="UTF-8">
+    <title>Administração - Auth HWID</title>
     <style>
-        body { background-color: #121212; color: white; font-family: Arial, sans-serif; text-align: center; }
-        table { width: 80%; margin: auto; border-collapse: collapse; }
-        th, td { border: 1px solid white; padding: 10px; text-align: left; }
-        button { background-color: #1e88e5; color: white; padding: 10px 20px; border: none; cursor: pointer; }
-        button:hover { background-color: #1565c0; }
+        body { background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; }
+        .container { width: 90%; margin: auto; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+        th { background-color: #1e1e1e; }
+        tr:nth-child(even) { background-color: #1e1e1e; }
+        a.button { background-color: #EA5656; color: #fff; padding: 6px 12px; text-decoration: none; border-radius: 4px; }
+        .login-box { margin: 50px auto; width: 300px; padding: 20px; background-color: #1e1e1e; border-radius: 8px; }
+        input[type="password"] { width: 100%; padding: 8px; margin: 10px 0; }
+        input[type="submit"] { background-color: #EA5656; color: #fff; border: none; padding: 10px; width: 100%; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h1>Registros de Ativação</h1>
-    
-    {% if authenticated %}
-        <button onclick="window.location.reload();">Atualizar Registros</button>
+    <div class="container">
+        {% if not authenticated %}
+        <div class="login-box">
+            <h2>Admin Login</h2>
+            <form method="post" action="{{ url_for('auth_hwid') }}">
+                <input type="password" name="password" placeholder="Senha de Admin" required>
+                <input type="submit" value="Entrar">
+            </form>
+        </div>
+        {% else %}
+        <h1>Registros de Ativação</h1>
         <table>
             <tr>
-                <th>ID</th>
+                <th>Activation ID</th>
                 <th>Chave</th>
+                <th>Tipo</th>
                 <th>HWID</th>
-                <th>Revogado</th>
+                <th>Data de Ativação</th>
+                <th>Ação</th>
             </tr>
-            {% for record in records %}
+            {% for r in records %}
             <tr>
-                <td>{{ record['activation_id'] }}</td>
-                <td>{{ record['key'] }}</td>
-                <td>{{ record['hwid'] }}</td>
-                <td>{{ "Sim" if record['revoked'] else "Não" }}</td>
+                <td>{{ r.activation_id }}</td>
+                <td>{{ r.chave }}</td>
+                <td>{{ r.tipo }}</td>
+                <td>{{ r.hwid or "N/D" }}</td>
+                <td>{{ r.data_ativacao or "N/D" }}</td>
+                <td>
+                    {% if not r.authorized %}
+                    <form method="post" action="{{ url_for('auth_hwid_authorize') }}">
+                        <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
+                        <input type="hidden" name="password" value="{{ admin_password }}">
+                        <input type="submit" value="Autorizar">
+                    </form>
+                    {% else %}
+                        Autorizado
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </table>
-    {% else %}
-        <p>Autenticação necessária</p>
-    {% endif %}
+        {% endif %}
+    </div>
 </body>
 </html>
 """
@@ -421,21 +447,20 @@ DARK_TEMPLATE = """
 def auth_hwid():
     authenticated = False
     admin_pass = None
-
     if request.method == "POST":
         admin_pass = request.form.get("password")
+        if admin_pass == ADMIN_PASSWORD:
+            authenticated = True
+        else:
+            return render_template_string(DARK_TEMPLATE, authenticated=False), 401
     else:
         admin_pass = request.args.get("password")
-
-    if admin_pass == ADMIN_PASSWORD:
-        authenticated = True
-    else:
-        return render_template_string(DARK_TEMPLATE, authenticated=False), 401
-
-    # 🔥 Filtrando registros onde "revoked = false"
-    result = supabase.table("activations").select("*").eq("revoked", False).execute()
+        if admin_pass == ADMIN_PASSWORD:
+            authenticated = True
+    if not authenticated:
+        return render_template_string(DARK_TEMPLATE, authenticated=False)
+    result = supabase.table("activations").select("*").execute()
     records = result.data if result.data else []
-
     return render_template_string(DARK_TEMPLATE, authenticated=True, records=records, admin_password=ADMIN_PASSWORD)
 
 @app.route("/auth-hwid/authorize", methods=["POST"])
