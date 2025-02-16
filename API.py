@@ -124,7 +124,7 @@ def validate():
         if registro.get("hwid") != hwid_request:
             return jsonify({
                 "valid": False,
-                "message": "Esta chave de ativação não foi registrada para este computador."
+                "message": "Autorização Recusada"
             }), 400
 
         if registro.get("tipo") == "Uso Único":
