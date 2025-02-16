@@ -155,16 +155,19 @@ def validate():
     }
     try:
         update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
-        if update_res.get("error"):
-            print("Erro na atualização do registro:", update_res.get("error"))
+        if not update_res.data:
+            print("Erro: atualização retornou dados vazios.")
             return jsonify({
                 "error": "Erro ao atualizar registro",
-                "details": update_res.get("error")
+                "details": "Dados não retornados"
             }), 500
     except Exception as e:
         print("Exceção ao atualizar registro:", e)
-        return jsonify({"error": "Erro ao atualizar registro", "details": str(e)}), 500
-
+        return jsonify({
+            "error": "Erro ao atualizar registro",
+            "details": str(e)
+        }), 500
+        
     return jsonify({
         "valid": True,
         "tipo": registro.get("tipo"),
