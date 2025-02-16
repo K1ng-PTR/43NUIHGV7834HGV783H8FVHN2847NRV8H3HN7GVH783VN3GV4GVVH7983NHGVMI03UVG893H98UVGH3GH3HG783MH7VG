@@ -79,14 +79,14 @@ def gerar_multiplo(quantidade):
     # A data de ativação será definida somente na primeira validação
     for _ in range(quantidade):
         chave = generate_key()
-        # Para chaves não ativadas, usamos HWID vazio e activation_id com HWID vazio
         activation_id = generate_activation_id("", chave)
         registro = {
             "hwid": "",
             "chave": chave,
             "activation_id": activation_id,
-            "data_ativacao": None,  # A data de ativação será atualizada no momento da validação
-            "tipo": tipo
+            "data_ativacao": None,  # Será definida no momento da validação
+            "tipo": tipo,
+            "authorized": False  # Inicialmente não autorizado
         }
         res = supabase.table("activations").insert(registro).execute()
         if res.error:
@@ -119,7 +119,42 @@ def validate():
 
     registro = res.data[0]
 
-    # Se já ativada, valida o HWID
+    # --- FLUXO PARA REGISTRO AUTORIZADO PELO ADMIN ---
+    if registro.get("authorized"):
+        # Se ainda não recebeu o HWID (ou seja, a app ainda não enviou o ID gerado com a nova chave)
+        if not registro.get("hwid"):
+            now_dt = datetime.datetime.now().isoformat()
+            # Gera o activation_id usando a nova chave autorizada e o HWID enviado pela app
+            new_activation_id = generate_activation_id(hwid_request, chave)
+            update_data = {
+                "hwid": hwid_request,
+                "activation_id": new_activation_id,
+                "data_ativacao": now_dt
+            }
+            try:
+                update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
+                if not update_res.data:
+                    return jsonify({
+                        "error": "Erro ao atualizar registro",
+                        "details": "Dados não retornados"
+                    }), 500
+            except Exception as e:
+                print("Exceção ao atualizar registro:", e)
+                return jsonify({
+                    "error": "Erro ao atualizar registro",
+                    "details": str(e)
+                }), 500
+            registro.update(update_data)
+        return jsonify({
+            "valid": True,
+            "authorized": True,
+            "tipo": registro.get("tipo"),
+            "data_ativacao": registro.get("data_ativacao"),
+            "activation_id": registro.get("activation_id"),
+            "message": "Chave validada e autorizada com sucesso."
+        }), 200
+
+    # --- FLUXO PARA REGISTRO JÁ ATIVADO (sem autorização extra) ---
     if registro.get("hwid"):
         if registro.get("hwid") != hwid_request:
             return jsonify({
@@ -145,7 +180,7 @@ def validate():
             "message": "Chave validada com sucesso."
         }), 200
 
-    # Se ainda não ativada, atualiza o registro com o HWID e data de ativação
+    # --- FLUXO PARA PRIMEIRA ATIVAÇÃO (sem HWID e sem autorização extra) ---
     now_dt = datetime.datetime.now().isoformat()
     new_activation_id = generate_activation_id(hwid_request, chave)
     update_data = {
@@ -168,6 +203,7 @@ def validate():
             "details": str(e)
         }), 500
         
+    registro.update(update_data)
     return jsonify({
         "valid": True,
         "tipo": registro.get("tipo"),
@@ -215,7 +251,8 @@ def stripe_webhook():
             "chave": chave,
             "activation_id": activation_id,
             "data_ativacao": None,
-            "tipo": tipo
+            "tipo": tipo,
+            "authorized": False
         }
         try:
             res = supabase.table("activations").insert(registro).execute()
@@ -371,11 +408,15 @@ DARK_TEMPLATE = """
                 <td>{{ r.hwid or "N/D" }}</td>
                 <td>{{ r.data_ativacao or "N/D" }}</td>
                 <td>
+                    {% if not r.authorized %}
                     <form method="post" action="{{ url_for('auth_hwid_authorize') }}">
                         <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
                         <input type="hidden" name="password" value="{{ admin_password }}">
                         <input type="submit" value="Autorizar">
                     </form>
+                    {% else %}
+                        Autorizado
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -423,22 +464,23 @@ def auth_hwid_authorize():
     registro = res.data[0]
     tipo = registro.get("tipo")
 
-    # Gera nova chave e activation_id automaticamente
+    # Ao autorizar, gera uma nova chave LifeTime e atualiza o registro:
+    # A nova chave será utilizada pela aplicação para gerar o novo activation_id.
     nova_chave = generate_key()
+    # O activation_id aqui é gerado sem HWID; a app o completará ao enviar seu HWID via /validation.
     novo_activation_id = generate_activation_id("", nova_chave)
 
     update_data = {
         "chave": nova_chave,
         "activation_id": novo_activation_id,
-        "hwid": "",            # limpa o HWID para que a app o envie novamente
-        "data_ativacao": None,  # reinicia a data de ativação
-        "authorized": True      # marca o registro como autorizado
+        "hwid": "",            # Limpa o HWID para que a aplicação envie-o novamente
+        "data_ativacao": None,  # Reinicia a data de ativação; ela será definida quando a app enviar o HWID
+        "authorized": True      # Marca o registro como autorizado
     }
     update_res = supabase.table("activations").update(update_data).eq("activation_id", activation_id).execute()
     if update_res.error:
         return "Erro ao atualizar o registro", 500
 
-    # Redireciona automaticamente de volta à tela de administração (ou pode exibir uma mensagem de conclusão)
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -451,7 +493,7 @@ def auth_hwid_authorize():
     <body>
       <h1>Autorização Realizada com Sucesso!</h1>
       <p>Nova chave gerada: <strong>{nova_chave}</strong></p>
-      <p>A aplicação será automaticamente notificada (via polling no endpoint /validation) para concluir a ativação e criar o license.json.</p>
+      <p>A aplicação, ao fazer polling no endpoint /validation, receberá a autorização, criará o novo License.json (excluindo o antigo) e reiniciará.</p>
       <p>Redirecionando...</p>
     </body>
     </html>
