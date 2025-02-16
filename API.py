@@ -202,7 +202,7 @@ def sucesso():
     id_compra = data["id_compra"]
     # Busca o registro de ativação correspondente à chave no Supabase
     res = supabase.table("activations").select("*").eq("chave", chave).execute()
-    if res.error or not res.data:
+    if not res.data:
         return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
     registro = res.data[0]
     html = f"""
