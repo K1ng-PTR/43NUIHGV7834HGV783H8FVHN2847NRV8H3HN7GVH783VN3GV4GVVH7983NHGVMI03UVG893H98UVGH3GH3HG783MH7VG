@@ -118,6 +118,14 @@ def validate():
 
     registro = res.data[0]
 
+    # Se a licença foi revogada, instrui a app a apagar o license.json e reabrir o menu de ativação
+    if registro.get("revoked"):
+        return jsonify({
+            "valid": False,
+            "reset": True,
+            "message": "Licença revogada. Por favor, apague license.json e reative a chave."
+        }), 200
+
     # Se o registro já foi ativado (ou seja, já possui um HWID registrado)
     if registro.get("hwid"):
         if registro.get("hwid") != hwid_request:
@@ -154,6 +162,38 @@ def validate():
             "activation_id": registro.get("activation_id"),
             "message": "Chave validada com sucesso."
         }), 200
+
+    # Fluxo para primeira ativação (sem HWID definido)
+    now_dt = datetime.datetime.now().isoformat()
+    new_activation_id = generate_activation_id(hwid_request, chave)
+    update_data = {
+        "hwid": hwid_request,
+        "activation_id": new_activation_id,
+        "data_ativacao": now_dt
+    }
+    try:
+        update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
+        if not update_res.data:
+            print("Erro: atualização retornou dados vazios.")
+            return jsonify({
+                "error": "Erro ao atualizar registro",
+                "details": "Dados não retornados"
+            }), 500
+    except Exception as e:
+        print("Exceção ao atualizar registro:", e)
+        return jsonify({
+            "error": "Erro ao atualizar registro",
+            "details": str(e)
+        }), 500
+        
+    registro.update(update_data)
+    return jsonify({
+        "valid": True,
+        "tipo": registro.get("tipo"),
+        "data_ativacao": now_dt,
+        "activation_id": new_activation_id,
+        "message": "Chave validada com sucesso."
+    }), 200
 
     # Fluxo para primeira ativação (sem HWID definido)
     now_dt = datetime.datetime.now().isoformat()
@@ -425,13 +465,13 @@ def auth_hwid():
 
 @app.route("/auth-hwid/authorize", methods=["POST"])
 def auth_hwid_authorize():
-    # Validação da senha administrativa
-    admin_pass = request.form.get("password")
+    # Obter a senha administrativa (do form ou JSON)
+    admin_pass = request.form.get("password") or (request.json or {}).get("password")
     if admin_pass != ADMIN_PASSWORD:
         return "<h1>Acesso não autorizado</h1>", 401
 
-    # Verifica se o activation_id antigo foi informado
-    activation_id_old = request.form.get("activation_id")
+    # Obter o activation_id do registro a ser revogado
+    activation_id_old = request.form.get("activation_id") or (request.json or {}).get("activation_id")
     if not activation_id_old:
         return "<h1>Activation ID não informado</h1>", 400
 
@@ -440,37 +480,32 @@ def auth_hwid_authorize():
     if not res.data:
         return "<h1>Registro não encontrado</h1>", 404
 
-    registro = res.data[0]
+    # Marcar o registro antigo como revogado
+    revoke_update = {"revoked": True}
+    supabase.table("activations").update(revoke_update).eq("activation_id", activation_id_old).execute()
 
-    # Gera uma nova chave do tipo LifeTime
+    # Gerar nova chave do tipo LifeTime (o client calculará ID, HWID, etc)
     new_key = generate_key()
-    # Como a app deverá gerar o novo activation ID (com seu HWID) ao reiniciar,
-    # aqui geramos o activation ID com HWID vazio.
-    new_activation_id = generate_activation_id("", new_key)
-
-    # Prepara o novo registro (activation não iniciado, pois hwid ficará vazio)
+    new_activation_id = generate_activation_id("", new_key)  # sem HWID
     new_record = {
-        "hwid": "",
+        "hwid": "",  # Ainda não vinculado
         "chave": new_key,
         "activation_id": new_activation_id,
-        "data_ativacao": None,
-        "tipo": "LifeTime"
+        "data_ativacao": None,  # Sem ativação ainda
+        "tipo": "LifeTime",
+        "revoked": False  # Nova licença válida
     }
-
-    # Remove o registro antigo
-    supabase.table("activations").delete().eq("activation_id", activation_id_old).execute()
-    # Insere o novo registro
     insert_res = supabase.table("activations").insert(new_record).execute()
     if not insert_res.data:
         return f"<h1>Erro ao inserir novo registro: {insert_res}</h1>", 500
 
-    # Retorna a página HTML com as instruções para o usuário
+    # Retornar a nova chave em HTML
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>Autorização Atualizada</title>
+        <title>Nova Chave Gerada</title>
         <style>
             body {{
                 background-color: #121212;
@@ -483,27 +518,29 @@ def auth_hwid_authorize():
                 width: 80%;
                 margin: auto;
             }}
-            a.button {{
-                background-color: #EA5656;
-                color: #fff;
-                padding: 10px 20px;
-                text-decoration: none;
-                border-radius: 4px;
+            .key-box {{
+                background-color: #1e1e1e;
+                padding: 20px;
+                border-radius: 8px;
+                display: inline-block;
+                margin-top: 20px;
+                font-size: 1.5em;
+                letter-spacing: 2px;
             }}
         </style>
     </head>
     <body>
         <div class="container">
             <h1>Autorização Atualizada!</h1>
-            <p>Nova Chave (LifeTime): <strong>{new_key}</strong></p>
-            <p>Activation ID: <strong>{new_activation_id}</strong></p>
-            <p>Por favor, apague o seu <code>license.json</code> e reinicie a aplicação para ativar com os novos dados.</p>
-            <p><em>Após reiniciar, o sistema deverá funcionar normalmente.</em></p>
+            <p>Sua licença atual foi revogada.</p>
+            <p>A nova chave gerada é:</p>
+            <div class="key-box">{new_key}</div>
+            <p>Por favor, copie essa chave e reinicie a aplicação para reativar.</p>
         </div>
     </body>
     </html>
     """
-    return response_html
+    return response_html, 200
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0")
