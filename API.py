@@ -461,8 +461,8 @@ def auth_hwid_authorize():
     supabase.table("activations").delete().eq("activation_id", activation_id_old).execute()
     # Insere o novo registro
     insert_res = supabase.table("activations").insert(new_record).execute()
-    if insert_res.error:
-        return f"<h1>Erro ao inserir novo registro: {insert_res.error.message}</h1>", 500
+    if not insert_res.data:
+        return f"<h1>Erro ao inserir novo registro: {insert_res}</h1>", 500
 
     # Retorna a página HTML com as instruções para o usuário
     response_html = f"""
