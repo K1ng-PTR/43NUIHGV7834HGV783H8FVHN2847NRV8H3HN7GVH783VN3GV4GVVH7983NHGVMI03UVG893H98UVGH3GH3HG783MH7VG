@@ -234,48 +234,43 @@ def stripe_webhook():
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
     except stripe.error.SignatureVerificationError as e:
-        print("Erro de verificação de assinatura:", e)
         return jsonify({"error": "Assinatura inválida"}), 400
     except Exception as e:
-        print("Erro ao construir evento do Stripe:", e)
         return jsonify({"error": str(e)}), 400
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        print("Evento checkout.session.completed recebido:", session)
         metadata = session.get("metadata", {})
         checkout_link = metadata.get("checkout_link", "")
+        # Define o tipo com base no checkout_link (ajuste conforme sua lógica)
         tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/test_6oE9E70jrdL47cseV7" else "LifeTime"
         now_dt = datetime.datetime.now().isoformat()
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
         registro = {
-            "hwid": "",
+            "hwid": "",  # Ainda não vinculado
             "chave": chave,
             "activation_id": activation_id,
-            "data_ativacao": None,
-            "tipo": tipo,
-            "authorized": False
+            "data_ativacao": now_dt,
+            "tipo": tipo
         }
         try:
             res = supabase.table("activations").insert(registro).execute()
-            print("Inserção no Supabase:", res.data)
         except Exception as e:
-            print("Erro ao inserir registro via Stripe:", e)
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": str(e)}), 500
 
         if not res.data:
-            print("Erro: Dados não retornados na inserção.")
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
 
         session_id = session.get("id")
-        session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/A")}
+        # Armazena os dados da sessão para que a página de sucesso possa exibir a chave
+        session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/D")}
         compra = {
             "comprador": session.get("customer_details", {}).get("email", "N/D"),
             "tipo_chave": tipo,
             "chave": chave,
-            "id_compra": session.get("id", "N/A"),
-            "preco": session.get("amount_total", "N/A"),
+            "id_compra": session.get("id", "N/D"),
+            "preco": session.get("amount_total", "N/D"),
             "checkout_url": checkout_link
         }
         pending_buys.append(compra)
@@ -357,7 +352,7 @@ def sucesso():
         <div class="key">{chave}</div>
         <p><strong>Purchase ID:</strong></p>
         <p>{id_compra}</p>
-        <p>Data de Ativação: <strong>{registro.get("data_ativacao") or "N/A"}</strong></p>
+        <p>Data de Ativação: <strong>{registro.get("data_ativacao")}</strong></p>
       </div>
     </body>
     </html>
