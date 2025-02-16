@@ -104,11 +104,11 @@ def gerar_multiplo(quantidade):
 @app.route('/validation', methods=['POST'])
 def validate():
     data = request.get_json()
-    if not data or 'chave' not in data:
-        return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
+    if not data or 'chave' not in data or 'hwid' not in data:
+        return jsonify({"error": "Os campos 'chave' e 'hwid' são obrigatórios."}), 400
 
     chave = data.get("chave")
-    hwid_request = data.get("hwid", "")
+    hwid_request = data.get("hwid")
     
     try:
         # Consulta o registro no Supabase pela chave
@@ -121,43 +121,45 @@ def validate():
 
     registro = res.data[0]
 
-    # Se a chave ainda não foi ativada, registra o HWID e gera o activation_id
-    if not registro.get("hwid"):
-        now_dt = datetime.datetime.now().isoformat()
-        # Gera o activation_id com a combinação do HWID recebido e da chave
-        new_activation_id = generate_activation_id(hwid_request, chave)
-        update_data = {"hwid": hwid_request, "activation_id": new_activation_id}
-        if not registro.get("data_ativacao"):
-            update_data["data_ativacao"] = now_dt
+    # Se a chave já foi ativada (ou seja, já possui um HWID registrado)
+    if registro.get("hwid"):
+        # Calcula o activation_id esperado com base no HWID registrado e na chave
+        expected_activation_id = generate_activation_id(registro.get("hwid"), chave)
+        # Se o HWID enviado for diferente ou o activation_id não bater, retorna erro
+        if registro.get("hwid") != hwid_request or registro.get("activation_id") != expected_activation_id:
+            return jsonify({
+                "valid": False,
+                "message": "Esta chave de ativação não foi registrada para este computador."
+            }), 400
 
+        # Mesmo que o HWID e activation_id estejam corretos, a chave já foi ativada
+        return jsonify({
+            "valid": False,
+            "message": "Chave já ativada."
+        }), 400
+
+    # Se a chave ainda não foi ativada, registra o HWID e gera o activation_id
+    now_dt = datetime.datetime.now().isoformat()
+    new_activation_id = generate_activation_id(hwid_request, chave)
+    update_data = {
+        "hwid": hwid_request,
+        "activation_id": new_activation_id,
+        "data_ativacao": now_dt
+    }
+    try:
         update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
-        # Verifica se há erro utilizando o método get, evitando o acesso ao atributo 'error'
         if update_res.get("error"):
             return jsonify({
-                "error": "Erro ao atualizar HWID e activation_id",
+                "error": "Erro ao atualizar registro",
                 "details": update_res.get("error")
             }), 500
+    except Exception as e:
+        return jsonify({"error": "Erro ao atualizar registro", "details": str(e)}), 500
 
-        # Atualiza os dados localmente
-        registro["hwid"] = hwid_request
-        registro["activation_id"] = new_activation_id
-        if "data_ativacao" not in registro:
-            registro["data_ativacao"] = now_dt
-
-    else:
-        # Se já foi ativada, verifica se o HWID recebido é o mesmo
-        if registro.get("hwid") != hwid_request:
-            return jsonify({"valid": False, "message": "Chave já ativada em outro dispositivo."}), 400
-
-        # Valida se o activation_id armazenado corresponde à combinação esperada
-        expected_activation_id = generate_activation_id(hwid_request, chave)
-        if registro.get("activation_id") != expected_activation_id:
-            return jsonify({"valid": False, "message": "Activation ID inválido para este dispositivo."}), 400
-
-    # Validação de tempo para chaves do tipo "Uso Único"
+    # Validação temporal para chaves do tipo "Uso Único"
     if registro.get("tipo") == "Uso Único":
         try:
-            activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
+            activation_date = datetime.datetime.fromisoformat(now_dt)
         except Exception:
             return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
 
@@ -168,8 +170,8 @@ def validate():
     return jsonify({
         "valid": True,
         "tipo": registro.get("tipo"),
-        "data_ativacao": registro.get("data_ativacao"),
-        "activation_id": registro.get("activation_id"),
+        "data_ativacao": now_dt,
+        "activation_id": new_activation_id,
         "message": "Chave validada com sucesso."
     }), 200
 
