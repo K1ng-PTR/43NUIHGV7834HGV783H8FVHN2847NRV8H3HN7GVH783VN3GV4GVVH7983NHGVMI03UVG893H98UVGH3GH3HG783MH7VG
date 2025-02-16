@@ -125,13 +125,16 @@ def validate():
                 "valid": False,
                 "message": "Autorização Recusada"
             }), 400
-        # Recalcula o activation ID esperado
+
         expected_activation_id = generate_activation_id(hwid_request, chave)
         if registro.get("activation_id") != expected_activation_id:
+            # A API informa que a licença foi atualizada (ex.: nova chave gerada pelo admin)
             return jsonify({
                 "valid": False,
-                "message": "Autorização Recusada"
-            }), 400
+                "update": True,
+                "new_data": registro,  # Envia os dados atuais do registro (com nova chave, data, etc.)
+                "message": "Nova chave gerada. A licença será atualizada."
+            }), 200
 
         # Para chaves do tipo "Uso Único", verifica expiração
         if registro.get("tipo") == "Uso Único":
@@ -152,7 +155,7 @@ def validate():
             "message": "Chave validada com sucesso."
         }), 200
 
-    # Caso ainda não tenha sido ativado, atualiza com o HWID e define o activation_id
+    # Fluxo para primeira ativação (sem HWID definido)
     now_dt = datetime.datetime.now().isoformat()
     new_activation_id = generate_activation_id(hwid_request, chave)
     update_data = {
@@ -427,29 +430,47 @@ def auth_hwid_authorize():
     if admin_pass != ADMIN_PASSWORD:
         return "<h1>Acesso não autorizado</h1>", 401
 
-    # Verifica se o activation_id foi informado
-    activation_id = request.form.get("activation_id")
-    if not activation_id:
+    # Verifica se o activation_id antigo foi informado
+    activation_id_old = request.form.get("activation_id")
+    if not activation_id_old:
         return "<h1>Activation ID não informado</h1>", 400
 
-    # Consulta o registro correspondente no Supabase
-    res = supabase.table("activations").select("*").eq("activation_id", activation_id).execute()
+    # Consulta o registro antigo no Supabase
+    res = supabase.table("activations").select("*").eq("activation_id", activation_id_old).execute()
     if not res.data:
         return "<h1>Registro não encontrado</h1>", 404
 
     registro = res.data[0]
 
-    # Verifica se o HWID já foi registrado (indicando que a app já iniciou a ativação)
-    if not registro.get("hwid"):
-        return "<h1>Ativação não iniciada. HWID não registrado.</h1>", 400
+    # Gera uma nova chave do tipo LifeTime
+    new_key = generate_key()
+    # Como a app deverá gerar o novo activation ID (com seu HWID) ao reiniciar,
+    # aqui geramos o activation ID com HWID vazio.
+    new_activation_id = generate_activation_id("", new_key)
 
-    # Constrói a página HTML informando que a autorização foi realizada com sucesso
+    # Prepara o novo registro (activation não iniciado, pois hwid ficará vazio)
+    new_record = {
+        "hwid": "",
+        "chave": new_key,
+        "activation_id": new_activation_id,
+        "data_ativacao": None,
+        "tipo": "LifeTime"
+    }
+
+    # Remove o registro antigo
+    supabase.table("activations").delete().eq("activation_id", activation_id_old).execute()
+    # Insere o novo registro
+    insert_res = supabase.table("activations").insert(new_record).execute()
+    if insert_res.error:
+        return f"<h1>Erro ao inserir novo registro: {insert_res.error.message}</h1>", 500
+
+    # Retorna a página HTML com as instruções para o usuário
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>Autorização Realizada</title>
+        <title>Autorização Atualizada</title>
         <style>
             body {{
                 background-color: #121212;
@@ -473,14 +494,11 @@ def auth_hwid_authorize():
     </head>
     <body>
         <div class="container">
-            <h1>Autorização realizada com sucesso!</h1>
-            <p>Activation ID: <strong>{registro.get("activation_id")}</strong></p>
-            <p>Chave: <strong>{registro.get("chave")}</strong></p>
-            <p>HWID: <strong>{registro.get("hwid")}</strong></p>
-            <p>Tipo: <strong>{registro.get("tipo")}</strong></p>
-            <p>Data de Ativação: <strong>{registro.get("data_ativacao")}</strong></p>
-            <p>A app pode agora criar o <code>license.json</code> com estes dados.</p>
-            <a class="button" href="{url_for('auth_hwid')}?password={ADMIN_PASSWORD}">Voltar</a>
+            <h1>Autorização Atualizada!</h1>
+            <p>Nova Chave (LifeTime): <strong>{new_key}</strong></p>
+            <p>Activation ID: <strong>{new_activation_id}</strong></p>
+            <p>Por favor, apague o seu <code>license.json</code> e reinicie a aplicação para ativar com os novos dados.</p>
+            <p><em>Após reiniciar, o sistema deverá funcionar normalmente.</em></p>
         </div>
     </body>
     </html>
