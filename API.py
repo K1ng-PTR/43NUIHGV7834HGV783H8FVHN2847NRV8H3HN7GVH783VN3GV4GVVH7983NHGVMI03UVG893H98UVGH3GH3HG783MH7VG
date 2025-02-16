@@ -455,52 +455,66 @@ def auth_hwid():
 
 @app.route("/auth-hwid/authorize", methods=["POST"])
 def auth_hwid_authorize():
+    # Validação da senha administrativa
     admin_pass = request.form.get("password")
     if admin_pass != ADMIN_PASSWORD:
-        return "Acesso não autorizado", 401
+        return "<h1>Acesso não autorizado</h1>", 401
 
+    # Verifica se o activation_id foi informado
     activation_id = request.form.get("activation_id")
     if not activation_id:
-        return "Activation ID não informado", 400
+        return "<h1>Activation ID não informado</h1>", 400
 
+    # Consulta o registro correspondente no Supabase
     res = supabase.table("activations").select("*").eq("activation_id", activation_id).execute()
     if not res.data:
-        return "Registro não encontrado", 404
+        return "<h1>Registro não encontrado</h1>", 404
 
     registro = res.data[0]
-    tipo = registro.get("tipo")
 
-    # Ao autorizar, gera uma nova chave LifeTime e atualiza o registro:
-    # A nova chave será utilizada pela aplicação para gerar o novo activation_id.
-    nova_chave = generate_key()
-    # O activation_id aqui é gerado sem HWID; a app o completará ao enviar seu HWID via /validation.
-    novo_activation_id = generate_activation_id("", nova_chave)
+    # Verifica se o HWID já foi registrado (ou seja, a app já iniciou a ativação)
+    if not registro.get("hwid"):
+        return "<h1>Ativação não iniciada. HWID não registrado.</h1>", 400
 
-    update_data = {
-        "chave": nova_chave,
-        "activation_id": novo_activation_id,
-        "hwid": "",            # Limpa o HWID para que a aplicação envie-o novamente
-        "data_ativacao": None,  # Reinicia a data de ativação; ela será definida quando a app enviar o HWID
-        "authorized": True      # Marca o registro como autorizado
-    }
-    update_res = supabase.table("activations").update(update_data).eq("activation_id", activation_id).execute()
-    if update_res.error:
-        return "Erro ao atualizar o registro", 500
-
+    # Constrói a página HTML para informar que a autorização foi realizada com sucesso
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
-      <meta charset="UTF-8">
-      <title>Autorização Realizada</title>
-      <!-- Redireciona automaticamente após 3 segundos -->
-      <meta http-equiv="refresh" content="3;url=/auth-hwid?password={ADMIN_PASSWORD}">
+        <meta charset="UTF-8">
+        <title>Autorização Realizada</title>
+        <style>
+            body {{
+                background-color: #121212;
+                color: #fff;
+                font-family: Arial, sans-serif;
+                text-align: center;
+                padding-top: 50px;
+            }}
+            .container {{
+                width: 80%;
+                margin: auto;
+            }}
+            a.button {{
+                background-color: #EA5656;
+                color: #fff;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 4px;
+            }}
+        </style>
     </head>
     <body>
-      <h1>Autorização Realizada com Sucesso!</h1>
-      <p>Nova chave gerada: <strong>{nova_chave}</strong></p>
-      <p>A aplicação, ao fazer polling no endpoint /validation, receberá a autorização, criará o novo License.json (excluindo o antigo) e reiniciará.</p>
-      <p>Redirecionando...</p>
+        <div class="container">
+            <h1>Autorização realizada com sucesso!</h1>
+            <p>Activation ID: <strong>{registro.get("activation_id")}</strong></p>
+            <p>Chave: <strong>{registro.get("chave")}</strong></p>
+            <p>HWID: <strong>{registro.get("hwid")}</strong></p>
+            <p>Tipo: <strong>{registro.get("tipo")}</strong></p>
+            <p>Data de Ativação: <strong>{registro.get("data_ativacao")}</strong></p>
+            <p>A app pode agora criar o <code>license.json</code> com estes dados.</p>
+            <a class="button" href="{url_for('auth_hwid')}?password={ADMIN_PASSWORD}">Voltar</a>
+        </div>
     </body>
     </html>
     """
