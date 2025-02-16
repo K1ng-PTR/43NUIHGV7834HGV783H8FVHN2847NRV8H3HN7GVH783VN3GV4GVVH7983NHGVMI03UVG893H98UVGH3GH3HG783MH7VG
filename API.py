@@ -111,6 +111,7 @@ def validate():
     try:
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
     except Exception as e:
+        print("Erro ao consultar o banco:", e)
         return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
 
     if not res.data:
@@ -118,7 +119,7 @@ def validate():
 
     registro = res.data[0]
 
-    # Se a chave já foi ativada, verificamos se o HWID bate
+    # Se já ativada, valida o HWID
     if registro.get("hwid"):
         if registro.get("hwid") != hwid_request:
             return jsonify({
@@ -126,11 +127,11 @@ def validate():
                 "message": "Esta chave de ativação não foi registrada para este computador."
             }), 400
 
-        # Para chaves de "Uso Único", verificamos a expiração com base na data de ativação registrada
         if registro.get("tipo") == "Uso Único":
             try:
                 activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
-            except Exception:
+            except Exception as e:
+                print("Erro ao converter data_ativacao:", e)
                 return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
             expiration_date = activation_date + datetime.timedelta(days=1)
             if datetime.datetime.now() > expiration_date:
@@ -144,7 +145,7 @@ def validate():
             "message": "Chave validada com sucesso."
         }), 200
 
-    # Se a chave ainda não foi ativada, atualizamos com o HWID fornecido e definimos a data de ativação
+    # Se ainda não ativada, atualiza o registro com o HWID e data de ativação
     now_dt = datetime.datetime.now().isoformat()
     new_activation_id = generate_activation_id(hwid_request, chave)
     update_data = {
@@ -155,11 +156,13 @@ def validate():
     try:
         update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
         if update_res.error:
+            print("Erro na atualização do registro:", update_res.error)
             return jsonify({
                 "error": "Erro ao atualizar registro",
                 "details": update_res.error.message
             }), 500
     except Exception as e:
+        print("Exceção ao atualizar registro:", e)
         return jsonify({"error": "Erro ao atualizar registro", "details": str(e)}), 500
 
     return jsonify({
