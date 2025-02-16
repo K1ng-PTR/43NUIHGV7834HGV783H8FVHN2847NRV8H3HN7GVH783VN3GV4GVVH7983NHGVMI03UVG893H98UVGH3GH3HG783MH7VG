@@ -408,46 +408,48 @@ def auth_hwid_authorize():
     admin_pass = request.form.get("password")
     if admin_pass != ADMIN_PASSWORD:
         return "Acesso não autorizado", 401
+
     activation_id = request.form.get("activation_id")
     if not activation_id:
         return "Activation ID não informado", 400
+
     res = supabase.table("activations").select("*").eq("activation_id", activation_id).execute()
     if not res.data:
         return "Registro não encontrado", 404
+
     registro = res.data[0]
     tipo = registro.get("tipo")
+
+    # Gera nova chave e activation_id automaticamente
     nova_chave = generate_key()
     novo_activation_id = generate_activation_id("", nova_chave)
-    supabase.table("activations").delete().eq("activation_id", activation_id).execute()
-    novo_registro = {
-        "activation_id": novo_activation_id,
+
+    update_data = {
         "chave": nova_chave,
-        "tipo": tipo,
-        "hwid": "",
-        "data_ativacao": None
+        "activation_id": novo_activation_id,
+        "hwid": "",            # limpa o HWID para que a app o envie novamente
+        "data_ativacao": None,  # reinicia a data de ativação
+        "authorized": True      # marca o registro como autorizado
     }
-    supabase.table("activations").insert(novo_registro).execute()
+    update_res = supabase.table("activations").update(update_data).eq("activation_id", activation_id).execute()
+    if update_res.error:
+        return "Erro ao atualizar o registro", 500
+
+    # Redireciona automaticamente de volta à tela de administração (ou pode exibir uma mensagem de conclusão)
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
-        <meta charset="UTF-8">
-        <title>Autorização Realizada</title>
-        <style>
-            body {{ background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }}
-            .container {{ width: 80%; margin: auto; }}
-            a.button {{ background-color: #EA5656; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px; }}
-        </style>
+      <meta charset="UTF-8">
+      <title>Autorização Realizada</title>
+      <!-- Redireciona automaticamente após 3 segundos -->
+      <meta http-equiv="refresh" content="3;url=/auth-hwid?password={ADMIN_PASSWORD}">
     </head>
     <body>
-        <div class="container">
-            <h1>Autorização realizada com sucesso!</h1>
-            <p>O registro com Activation ID <strong>{activation_id}</strong> foi resetado.</p>
-            <p>Nova Chave: <strong>{nova_chave}</strong></p>
-            <p>Novo Activation ID: <strong>{novo_activation_id}</strong></p>
-            <p>Tipo: <strong>{tipo}</strong></p>
-            <a class="button" href="{url_for('auth_hwid')}?password={ADMIN_PASSWORD}">Voltar</a>
-        </div>
+      <h1>Autorização Realizada com Sucesso!</h1>
+      <p>Nova chave gerada: <strong>{nova_chave}</strong></p>
+      <p>A aplicação será automaticamente notificada (via polling no endpoint /validation) para concluir a ativação e criar o license.json.</p>
+      <p>Redirecionando...</p>
     </body>
     </html>
     """
