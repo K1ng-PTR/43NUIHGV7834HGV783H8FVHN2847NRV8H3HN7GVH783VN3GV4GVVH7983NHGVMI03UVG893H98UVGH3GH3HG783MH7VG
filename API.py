@@ -118,14 +118,22 @@ def validate():
 
     registro = res.data[0]
 
-    # Se a chave já foi ativada (ou seja, já possui um HWID registrado)
+    # Se o registro já foi ativado (ou seja, já possui um HWID registrado)
     if registro.get("hwid"):
         if registro.get("hwid") != hwid_request:
             return jsonify({
                 "valid": False,
                 "message": "Autorização Recusada"
             }), 400
+        # Recalcula o activation ID esperado
+        expected_activation_id = generate_activation_id(hwid_request, chave)
+        if registro.get("activation_id") != expected_activation_id:
+            return jsonify({
+                "valid": False,
+                "message": "Autorização Recusada"
+            }), 400
 
+        # Para chaves do tipo "Uso Único", verifica expiração
         if registro.get("tipo") == "Uso Único":
             try:
                 activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
@@ -144,7 +152,7 @@ def validate():
             "message": "Chave validada com sucesso."
         }), 200
 
-    # Fluxo para primeira ativação (sem HWID definido)
+    # Caso ainda não tenha sido ativado, atualiza com o HWID e define o activation_id
     now_dt = datetime.datetime.now().isoformat()
     new_activation_id = generate_activation_id(hwid_request, chave)
     update_data = {
