@@ -156,6 +156,7 @@ def validate():
     chave = data.get("chave")
     hwid_request = data.get("hwid")
     
+    # Tenta consultar o registro com base na chave
     try:
         res = supabase_select("activations", "chave", chave)
     except Exception as e:
@@ -167,7 +168,7 @@ def validate():
 
     registro = res.data[0]
 
-    # Se a licença foi revogada, instrui a app a apagar o license.json e reabrir o menu de ativação
+    # Se a licença foi revogada, indica que a app deve resetar (ex.: apagar o license.json)
     if registro.get("revoked"):
         return jsonify({
             "valid": False,
@@ -175,7 +176,7 @@ def validate():
             "message": "Licença revogada. Por favor, apague license.json e reative a chave."
         }), 200
 
-    # Se o registro já foi ativado (ou seja, já possui um HWID registrado)
+    # Se o registro já tiver um HWID, faz validações adicionais
     if registro.get("hwid"):
         if registro.get("hwid") != hwid_request:
             return jsonify({
@@ -185,15 +186,15 @@ def validate():
 
         expected_activation_id = generate_activation_id(hwid_request, chave)
         if registro.get("activation_id") != expected_activation_id:
-            # A API informa que a licença foi atualizada (ex.: nova chave gerada pelo admin)
+            # Indica que o registro foi atualizado (ex.: nova chave gerada pelo admin)
             return jsonify({
                 "valid": False,
                 "update": True,
-                "new_data": registro,  # Envia os dados atuais do registro (com nova chave, data, etc.)
+                "new_data": registro,
                 "message": "Nova chave gerada. A licença será atualizada."
             }), 200
 
-        # Para chaves do tipo "Uso Único", verifica expiração
+        # Para licenças de "Uso Único", verifica expiração (1 dia de validade)
         if registro.get("tipo") == "Uso Único":
             try:
                 activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
@@ -212,7 +213,7 @@ def validate():
             "message": "Chave validada com sucesso."
         }), 200
 
-    # Fluxo para primeira ativação (sem HWID definido)
+    # Fluxo de primeira ativação (quando o HWID ainda não está definido)
     now_dt = datetime.datetime.now().isoformat()
     new_activation_id = generate_activation_id(hwid_request, chave)
     update_data = {
@@ -275,7 +276,7 @@ def stripe_webhook():
         session = event["data"]["object"]
         metadata = session.get("metadata", {})
         checkout_link = metadata.get("checkout_link", "")
-        # Define o tipo conforme sua lógica
+        # Define o tipo com base na URL de checkout
         tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/test_6oE9E70jrdL47cseV7" else "LifeTime"
         now_dt = datetime.datetime.now().isoformat()
         chave = generate_key()
@@ -290,6 +291,7 @@ def stripe_webhook():
         try:
             res = supabase_insert("activations", registro)
         except Exception as e:
+            logging.error(f"Erro ao inserir registro via Stripe: {e}")
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": str(e)}), 500
 
         if not res.data:
@@ -310,7 +312,7 @@ def stripe_webhook():
             pending_buys.append(compra)
         return jsonify({"status": "success", "session_id": session_id, "chave": chave}), 200
     return jsonify({"status": "ignored"}), 200
-
+    
 @app.route("/sucesso", methods=["GET"])
 def sucesso():
     session_id = request.args.get("session_id")
