@@ -5,11 +5,17 @@ import string
 import datetime
 import hashlib
 import sys
+import time
+import logging
+import threading
 from datetime import timedelta
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 from dotenv import load_dotenv
 import stripe
 from supabase import create_client, Client
+
+# Configuração básica de logging (ajuste conforme necessário)
+logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 app = Flask(__name__)
@@ -37,9 +43,12 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     raise Exception("SUPABASE_URL e SUPABASE_KEY são necessários.")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Variáveis globais para armazenar compras e sessões pendentes
+# Variáveis globais para armazenar compras e sessões pendentes (com locks para acesso thread-safe)
 pending_buys = []
+pending_buys_lock = threading.Lock()
+
 session_keys = {}
+session_keys_lock = threading.Lock()
 
 # === FUNÇÕES AUXILIARES ===
 def generate_key():
@@ -59,6 +68,46 @@ def generate_activation_id(hwid, chave):
     num = int(h, 16) % (10**22)
     return str(num).zfill(22)
 
+# Funções para operações seguras com Supabase (com retry)
+def supabase_insert(table, record, retries=3, delay=0.1):
+    for attempt in range(retries):
+        try:
+            res = supabase.table(table).insert(record).execute()
+            if res.error:
+                raise Exception(res.error.message)
+            return res
+        except Exception as e:
+            logging.error(f"Erro ao inserir registro na tabela {table}: {e}")
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+
+def supabase_update(table, update_data, column, value, retries=3, delay=0.1):
+    for attempt in range(retries):
+        try:
+            res = supabase.table(table).update(update_data).eq(column, value).execute()
+            if res.error:
+                raise Exception(res.error.message)
+            return res
+        except Exception as e:
+            logging.error(f"Erro ao atualizar registro na tabela {table}: {e}")
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+
+def supabase_select(table, column, value, retries=3, delay=0.1):
+    for attempt in range(retries):
+        try:
+            res = supabase.table(table).select("*").eq(column, value).execute()
+            if res.error:
+                raise Exception(res.error.message)
+            return res
+        except Exception as e:
+            logging.error(f"Erro ao selecionar registro na tabela {table}: {e}")
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+
 # === ENDPOINTS DA API ===
 
 @app.route('/gerar/<int:quantidade>', methods=['POST'])
@@ -76,7 +125,6 @@ def gerar_multiplo(quantidade):
         return jsonify({"error": "Tipo inválido. Deve ser 'Uso Único' ou 'LifeTime'."}), 400
 
     chaves_geradas = []
-    # A data de ativação será definida somente na primeira validação
     for _ in range(quantidade):
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
@@ -87,9 +135,10 @@ def gerar_multiplo(quantidade):
             "data_ativacao": None,  # Será definida no momento da validação
             "tipo": tipo
         }
-        res = supabase.table("activations").insert(registro).execute()
-        if res.error:
-            return jsonify({"error": "Erro ao inserir registro no banco", "details": res.error.message}), 500
+        try:
+            res = supabase_insert("activations", registro)
+        except Exception as e:
+            return jsonify({"error": "Erro ao inserir registro no banco", "details": str(e)}), 500
         chaves_geradas.append({
             "chave": chave,
             "tipo": tipo,
@@ -108,9 +157,9 @@ def validate():
     hwid_request = data.get("hwid")
     
     try:
-        res = supabase.table("activations").select("*").eq("chave", chave).execute()
+        res = supabase_select("activations", "chave", chave)
     except Exception as e:
-        print("Erro ao consultar o banco:", e)
+        logging.error(f"Erro ao consultar o banco: {e}")
         return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
 
     if not res.data:
@@ -149,9 +198,9 @@ def validate():
             try:
                 activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
             except Exception as e:
-                print("Erro ao converter data_ativacao:", e)
+                logging.error(f"Erro ao converter data_ativacao: {e}")
                 return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
-            expiration_date = activation_date + datetime.timedelta(days=1)
+            expiration_date = activation_date + timedelta(days=1)
             if datetime.datetime.now() > expiration_date:
                 return jsonify({"valid": False, "message": "Chave expirada."}), 400
 
@@ -172,47 +221,15 @@ def validate():
         "data_ativacao": now_dt
     }
     try:
-        update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
+        update_res = supabase_update("activations", update_data, "chave", chave)
         if not update_res.data:
-            print("Erro: atualização retornou dados vazios.")
+            logging.error("Erro: atualização retornou dados vazios.")
             return jsonify({
                 "error": "Erro ao atualizar registro",
                 "details": "Dados não retornados"
             }), 500
     except Exception as e:
-        print("Exceção ao atualizar registro:", e)
-        return jsonify({
-            "error": "Erro ao atualizar registro",
-            "details": str(e)
-        }), 500
-        
-    registro.update(update_data)
-    return jsonify({
-        "valid": True,
-        "tipo": registro.get("tipo"),
-        "data_ativacao": now_dt,
-        "activation_id": new_activation_id,
-        "message": "Chave validada com sucesso."
-    }), 200
-
-    # Fluxo para primeira ativação (sem HWID definido)
-    now_dt = datetime.datetime.now().isoformat()
-    new_activation_id = generate_activation_id(hwid_request, chave)
-    update_data = {
-        "hwid": hwid_request,
-        "activation_id": new_activation_id,
-        "data_ativacao": now_dt
-    }
-    try:
-        update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
-        if not update_res.data:
-            print("Erro: atualização retornou dados vazios.")
-            return jsonify({
-                "error": "Erro ao atualizar registro",
-                "details": "Dados não retornados"
-            }), 500
-    except Exception as e:
-        print("Exceção ao atualizar registro:", e)
+        logging.error(f"Exceção ao atualizar registro: {e}")
         return jsonify({
             "error": "Erro ao atualizar registro",
             "details": str(e)
@@ -230,8 +247,9 @@ def validate():
 @app.route('/buys', methods=['GET'])
 def get_buys():
     global pending_buys
-    compras = pending_buys.copy()
-    pending_buys.clear()
+    with pending_buys_lock:
+        compras = pending_buys.copy()
+        pending_buys.clear()
     return jsonify(compras), 200
 
 @app.route('/ping', methods=['GET'])
@@ -270,7 +288,7 @@ def stripe_webhook():
             "tipo": tipo
         }
         try:
-            res = supabase.table("activations").insert(registro).execute()
+            res = supabase_insert("activations", registro)
         except Exception as e:
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": str(e)}), 500
 
@@ -278,8 +296,8 @@ def stripe_webhook():
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
 
         session_id = session.get("id")
-        # Armazena os dados da sessão para a página de sucesso
-        session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/D")}
+        with session_keys_lock:
+            session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/D")}
         compra = {
             "comprador": session.get("customer_details", {}).get("email", "N/D"),
             "tipo_chave": tipo,
@@ -288,7 +306,8 @@ def stripe_webhook():
             "preco": session.get("amount_total", "N/D"),
             "checkout_url": checkout_link
         }
-        pending_buys.append(compra)
+        with pending_buys_lock:
+            pending_buys.append(compra)
         return jsonify({"status": "success", "session_id": session_id, "chave": chave}), 200
     return jsonify({"status": "ignored"}), 200
 
@@ -297,12 +316,16 @@ def sucesso():
     session_id = request.args.get("session_id")
     if not session_id:
         return "<h1>Erro:</h1><p>session_id é necessário.</p>", 400
-    data = session_keys.get(session_id)
+    with session_keys_lock:
+        data = session_keys.get(session_id)
     if not data:
         return "<h1>Erro:</h1><p>Chave não encontrada para a sessão fornecida.</p>", 404
     chave = data["chave"]
     id_compra = data["id_compra"]
-    res = supabase.table("activations").select("*").eq("chave", chave).execute()
+    try:
+        res = supabase_select("activations", "chave", chave)
+    except Exception as e:
+        return "<h1>Erro:</h1><p>Erro ao obter detalhes da chave.</p>", 500
     if not res.data:
         return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
     registro = res.data[0]
@@ -459,7 +482,11 @@ def auth_hwid():
             authenticated = True
     if not authenticated:
         return render_template_string(DARK_TEMPLATE, authenticated=False)
-    result = supabase.table("activations").select("*").execute()
+    try:
+        result = supabase.table("activations").select("*").execute()
+    except Exception as e:
+        logging.error(f"Erro ao obter registros: {e}")
+        return "<h1>Erro ao obter registros</h1>", 500
     records = result.data if result.data else []
     return render_template_string(DARK_TEMPLATE, authenticated=True, records=records, admin_password=ADMIN_PASSWORD)
 
@@ -475,14 +502,22 @@ def auth_hwid_authorize():
     if not activation_id_old:
         return "<h1>Activation ID não informado</h1>", 400
 
-    # Consulta o registro antigo no Supabase
-    res = supabase.table("activations").select("*").eq("activation_id", activation_id_old).execute()
+    try:
+        res = supabase.table("activations").select("*").eq("activation_id", activation_id_old).execute()
+    except Exception as e:
+        logging.error(f"Erro ao consultar registro: {e}")
+        return "<h1>Erro ao consultar registro</h1>", 500
+
     if not res.data:
         return "<h1>Registro não encontrado</h1>", 404
 
     # Marcar o registro antigo como revogado
     revoke_update = {"revoked": True}
-    supabase.table("activations").update(revoke_update).eq("activation_id", activation_id_old).execute()
+    try:
+        supabase_update("activations", revoke_update, "activation_id", activation_id_old)
+    except Exception as e:
+        logging.error(f"Erro ao revogar registro: {e}")
+        return "<h1>Erro ao revogar registro</h1>", 500
 
     # Gerar nova chave do tipo LifeTime (o client calculará ID, HWID, etc)
     new_key = generate_key()
@@ -495,9 +530,14 @@ def auth_hwid_authorize():
         "tipo": "LifeTime",
         "revoked": False  # Nova licença válida
     }
-    insert_res = supabase.table("activations").insert(new_record).execute()
+    try:
+        insert_res = supabase_insert("activations", new_record)
+    except Exception as e:
+        logging.error(f"Erro ao inserir novo registro: {e}")
+        return f"<h1>Erro ao inserir novo registro: {e}</h1>", 500
+
     if not insert_res.data:
-        return f"<h1>Erro ao inserir novo registro: {insert_res}</h1>", 500
+        return f"<h1>Erro ao inserir novo registro: Dados não retornados</h1>", 500
 
     # Retornar a nova chave em HTML
     response_html = f"""
@@ -543,4 +583,5 @@ def auth_hwid_authorize():
     return response_html, 200
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0")
+    # Atenção: Em produção, utilize um servidor WSGI (como Gunicorn) com múltiplos workers.
+    app.run(host="0.0.0.0", threaded=True)
