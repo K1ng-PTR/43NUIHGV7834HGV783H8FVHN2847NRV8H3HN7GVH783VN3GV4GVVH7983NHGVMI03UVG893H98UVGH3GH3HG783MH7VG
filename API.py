@@ -4,6 +4,7 @@ import random
 import string
 import datetime
 import hashlib
+import sys
 from datetime import timedelta
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 from dotenv import load_dotenv
@@ -75,6 +76,7 @@ def gerar_multiplo(quantidade):
         return jsonify({"error": "Tipo inválido. Deve ser 'Uso Único' ou 'LifeTime'."}), 400
 
     chaves_geradas = []
+    # A data de ativação será definida somente na primeira validação
     for _ in range(quantidade):
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
@@ -86,10 +88,9 @@ def gerar_multiplo(quantidade):
             "tipo": tipo
         }
         res = supabase.table("activations").insert(registro).execute()
-        error = res.get("error")
-        if error:
-            # Não expõe detalhes internos em ambiente de produção
-            return jsonify({"error": "Erro ao inserir registro no banco"}), 500
+        if not res.data:
+            return jsonify({"error": "Erro ao inserir registro no banco", "details": "Dados não retornados"}), 500
+            
         chaves_geradas.append({
             "chave": chave,
             "tipo": tipo,
@@ -111,14 +112,14 @@ def validate():
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
     except Exception as e:
         print("Erro ao consultar o banco:", e)
-        return jsonify({"error": "Erro ao consultar o banco"}), 500
+        return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
 
-    if not res.get("data"):
+    if not res.data:
         return jsonify({"valid": False, "message": "Chave inválida."}), 400
 
-    registro = res.get("data")[0]
+    registro = res.data[0]
 
-    # Se a licença foi revogada, instrui a app a reativar a chave
+    # Se a licença foi revogada, instrui a app a apagar o license.json e reabrir o menu de ativação
     if registro.get("revoked"):
         return jsonify({
             "valid": False,
@@ -136,26 +137,24 @@ def validate():
 
         expected_activation_id = generate_activation_id(hwid_request, chave)
         if registro.get("activation_id") != expected_activation_id:
+            # A API informa que a licença foi atualizada (ex.: nova chave gerada pelo admin)
             return jsonify({
                 "valid": False,
                 "update": True,
-                "new_data": registro,
+                "new_data": registro,  # Envia os dados atuais do registro (com nova chave, data, etc.)
                 "message": "Nova chave gerada. A licença será atualizada."
             }), 200
 
+        # Para chaves do tipo "Uso Único", verifica expiração
         if registro.get("tipo") == "Uso Único":
             try:
                 activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
             except Exception as e:
                 print("Erro ao converter data_ativacao:", e)
                 return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
-            expiration_date = activation_date + timedelta(days=1)
+            expiration_date = activation_date + datetime.timedelta(days=1)
             if datetime.datetime.now() > expiration_date:
-                # Remove o registro expirado do banco de dados
-                delete_response = supabase.table("activations").delete().eq("chave", chave).execute()
-                if delete_response.get("error"):
-                    print("Erro ao remover chave expirada.")
-                return jsonify({"valid": False, "message": "Chave expirada e removida."}), 400
+                return jsonify({"valid": False, "message": "Chave expirada."}), 400
 
         return jsonify({
             "valid": True,
@@ -175,12 +174,50 @@ def validate():
     }
     try:
         update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
-        if not update_res.get("data"):
+        if not update_res.data:
             print("Erro: atualização retornou dados vazios.")
-            return jsonify({"error": "Erro ao atualizar registro"}), 500
+            return jsonify({
+                "error": "Erro ao atualizar registro",
+                "details": "Dados não retornados"
+            }), 500
     except Exception as e:
         print("Exceção ao atualizar registro:", e)
-        return jsonify({"error": "Erro ao atualizar registro"}), 500
+        return jsonify({
+            "error": "Erro ao atualizar registro",
+            "details": str(e)
+        }), 500
+        
+    registro.update(update_data)
+    return jsonify({
+        "valid": True,
+        "tipo": registro.get("tipo"),
+        "data_ativacao": now_dt,
+        "activation_id": new_activation_id,
+        "message": "Chave validada com sucesso."
+    }), 200
+
+    # Fluxo para primeira ativação (sem HWID definido)
+    now_dt = datetime.datetime.now().isoformat()
+    new_activation_id = generate_activation_id(hwid_request, chave)
+    update_data = {
+        "hwid": hwid_request,
+        "activation_id": new_activation_id,
+        "data_ativacao": now_dt
+    }
+    try:
+        update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
+        if not update_res.data:
+            print("Erro: atualização retornou dados vazios.")
+            return jsonify({
+                "error": "Erro ao atualizar registro",
+                "details": "Dados não retornados"
+            }), 500
+    except Exception as e:
+        print("Exceção ao atualizar registro:", e)
+        return jsonify({
+            "error": "Erro ao atualizar registro",
+            "details": str(e)
+        }), 500
         
     registro.update(update_data)
     return jsonify({
@@ -215,18 +252,19 @@ def stripe_webhook():
     except stripe.error.SignatureVerificationError as e:
         return jsonify({"error": "Assinatura inválida"}), 400
     except Exception as e:
-        return jsonify({"error": "Erro ao processar webhook"}), 400
+        return jsonify({"error": str(e)}), 400
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         metadata = session.get("metadata", {})
         checkout_link = metadata.get("checkout_link", "")
+        # Define o tipo conforme sua lógica
         tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/test_6oE9E70jrdL47cseV7" else "LifeTime"
         now_dt = datetime.datetime.now().isoformat()
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
         registro = {
-            "hwid": "",
+            "hwid": "",  # Ainda não vinculado
             "chave": chave,
             "activation_id": activation_id,
             "data_ativacao": now_dt,
@@ -235,12 +273,13 @@ def stripe_webhook():
         try:
             res = supabase.table("activations").insert(registro).execute()
         except Exception as e:
-            return jsonify({"error": "Erro ao inserir registro via Stripe"}), 500
+            return jsonify({"error": "Erro ao inserir registro via Stripe", "details": str(e)}), 500
 
-        if res.get("error"):
-            return jsonify({"error": "Erro ao inserir registro via Stripe"}), 500
+        if not res.data:
+            return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
 
         session_id = session.get("id")
+        # Armazena os dados da sessão para a página de sucesso
         session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/D")}
         compra = {
             "comprador": session.get("customer_details", {}).get("email", "N/D"),
@@ -265,9 +304,9 @@ def sucesso():
     chave = data["chave"]
     id_compra = data["id_compra"]
     res = supabase.table("activations").select("*").eq("chave", chave).execute()
-    if not res.get("data"):
+    if not res.data:
         return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
-    registro = res.get("data")[0]
+    registro = res.data[0]
     html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -407,50 +446,61 @@ DARK_TEMPLATE = """
 
 @app.route("/auth-hwid", methods=["GET", "POST"])
 def auth_hwid():
-    # Permite autenticação somente via POST
+    authenticated = False
+    admin_pass = None
     if request.method == "POST":
         admin_pass = request.form.get("password")
-        if admin_pass != ADMIN_PASSWORD:
+        if admin_pass == ADMIN_PASSWORD:
+            authenticated = True
+        else:
             return render_template_string(DARK_TEMPLATE, authenticated=False), 401
-        authenticated = True
     else:
+        admin_pass = request.args.get("password")
+        if admin_pass == ADMIN_PASSWORD:
+            authenticated = True
+    if not authenticated:
         return render_template_string(DARK_TEMPLATE, authenticated=False)
-    
     result = supabase.table("activations").select("*").execute()
-    records = result.get("data") if result.get("data") else []
+    records = result.data if result.data else []
     return render_template_string(DARK_TEMPLATE, authenticated=True, records=records, admin_password=ADMIN_PASSWORD)
 
 @app.route("/auth-hwid/authorize", methods=["POST"])
 def auth_hwid_authorize():
+    # Obter a senha administrativa (do form ou JSON)
     admin_pass = request.form.get("password") or (request.json or {}).get("password")
     if admin_pass != ADMIN_PASSWORD:
         return "<h1>Acesso não autorizado</h1>", 401
 
+    # Obter o activation_id do registro a ser revogado
     activation_id_old = request.form.get("activation_id") or (request.json or {}).get("activation_id")
     if not activation_id_old:
         return "<h1>Activation ID não informado</h1>", 400
 
+    # Consulta o registro antigo no Supabase
     res = supabase.table("activations").select("*").eq("activation_id", activation_id_old).execute()
-    if not res.get("data"):
+    if not res.data:
         return "<h1>Registro não encontrado</h1>", 404
 
+    # Marcar o registro antigo como revogado
     revoke_update = {"revoked": True}
     supabase.table("activations").update(revoke_update).eq("activation_id", activation_id_old).execute()
 
+    # Gerar nova chave do tipo LifeTime (o client calculará ID, HWID, etc)
     new_key = generate_key()
-    new_activation_id = generate_activation_id("", new_key)
+    new_activation_id = generate_activation_id("", new_key)  # sem HWID
     new_record = {
-        "hwid": "",
+        "hwid": "",  # Ainda não vinculado
         "chave": new_key,
         "activation_id": new_activation_id,
-        "data_ativacao": None,
+        "data_ativacao": None,  # Sem ativação ainda
         "tipo": "LifeTime",
-        "revoked": False
+        "revoked": False  # Nova licença válida
     }
     insert_res = supabase.table("activations").insert(new_record).execute()
-    if not insert_res.get("data"):
-        return "<h1>Erro ao inserir novo registro</h1>", 500
+    if not insert_res.data:
+        return f"<h1>Erro ao inserir novo registro: {insert_res}</h1>", 500
 
+    # Retornar a nova chave em HTML
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
