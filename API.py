@@ -4,25 +4,15 @@ import random
 import string
 import datetime
 import hashlib
+import sys
 from datetime import timedelta
+from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 from dotenv import load_dotenv
 import stripe
 from supabase import create_client, Client
 
-from fastapi import FastAPI, Request, HTTPException, Form, Query
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-
 load_dotenv()
-
-# Inicializa o FastAPI
-app = FastAPI()
-
-# Obtém o diretório onde este arquivo está localizado
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Define o diretório de templates (pode ser configurado via variável de ambiente)
-TEMPLATES_DIR = os.environ.get("TEMPLATES_DIR", os.path.join(BASE_DIR, "templates"))
-templates = Jinja2Templates(directory=TEMPLATES_DIR)
+app = Flask(__name__)
 
 # === VARIÁVEIS DE AMBIENTE ===
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
@@ -69,28 +59,24 @@ def generate_activation_id(hwid, chave):
     num = int(h, 16) % (10**22)
     return str(num).zfill(22)
 
-# ============================
-# ENDPOINTS DA API (JSON)
-# ============================
+# === ENDPOINTS DA API ===
 
-@app.post("/gerar/{quantidade}")
-async def gerar_multiplo(quantidade: int, request: Request):
+@app.route('/gerar/<int:quantidade>', methods=['POST'])
+def gerar_multiplo(quantidade):
     if quantidade < 1 or quantidade > 300:
-        raise HTTPException(status_code=400, detail="Quantidade deve ser entre 1 e 300.")
+        return jsonify({"error": "Quantidade deve ser entre 1 e 300."}), 400
     provided_password = request.headers.get("X-Gen-Password", "")
     if provided_password != SUPER_PASSWORD:
-        raise HTTPException(status_code=401, detail="Acesso não autorizado")
-    try:
-        data = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="JSON inválido.")
+        return jsonify({"error": "Acesso não autorizado"}), 401
+    data = request.get_json()
     if not data or 'tipo' not in data:
-        raise HTTPException(status_code=400, detail="O campo 'tipo' é obrigatório.")
+        return jsonify({"error": "O campo 'tipo' é obrigatório."}), 400
     tipo = data.get("tipo")
     if tipo not in ["Uso Único", "LifeTime"]:
-        raise HTTPException(status_code=400, detail="Tipo inválido. Deve ser 'Uso Único' ou 'LifeTime'.")
+        return jsonify({"error": "Tipo inválido. Deve ser 'Uso Único' ou 'LifeTime'."}), 400
 
     chaves_geradas = []
+    # A data de ativação será definida somente na primeira validação
     for _ in range(quantidade):
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
@@ -103,78 +89,79 @@ async def gerar_multiplo(quantidade: int, request: Request):
         }
         res = supabase.table("activations").insert(registro).execute()
         if res.error:
-            raise HTTPException(status_code=500, detail=f"Erro ao inserir registro no banco: {res.error.message}")
+            return jsonify({"error": "Erro ao inserir registro no banco", "details": res.error.message}), 500
         chaves_geradas.append({
             "chave": chave,
             "tipo": tipo,
             "activation_id": activation_id,
             "data_ativacao": None
         })
-    return {"chaves": chaves_geradas}
+    return jsonify({"chaves": chaves_geradas}), 200
 
-
-@app.post("/validation")
-async def validate(request: Request):
-    try:
-        data = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="JSON inválido.")
+@app.route('/validation', methods=['POST'])
+def validate():
+    data = request.get_json()
     if not data or 'chave' not in data or 'hwid' not in data:
-        raise HTTPException(status_code=400, detail="Os campos 'chave' e 'hwid' são obrigatórios.")
+        return jsonify({"error": "Os campos 'chave' e 'hwid' são obrigatórios."}), 400
 
     chave = data.get("chave")
     hwid_request = data.get("hwid")
-
+    
     try:
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao consultar o banco: {str(e)}")
+        print("Erro ao consultar o banco:", e)
+        return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
 
     if not res.data:
-        return {"valid": False, "message": "Chave inválida."}
+        return jsonify({"valid": False, "message": "Chave inválida."}), 400
 
     registro = res.data[0]
 
     # Se a licença foi revogada, instrui a app a apagar o license.json e reabrir o menu de ativação
     if registro.get("revoked"):
-        return {
+        return jsonify({
             "valid": False,
             "reset": True,
             "message": "Licença revogada. Por favor, apague license.json e reative a chave."
-        }
+        }), 200
 
     # Se o registro já foi ativado (ou seja, já possui um HWID registrado)
     if registro.get("hwid"):
         if registro.get("hwid") != hwid_request:
-            return {
+            return jsonify({
                 "valid": False,
                 "message": "Autorização Recusada"
-            }
+            }), 400
+
         expected_activation_id = generate_activation_id(hwid_request, chave)
         if registro.get("activation_id") != expected_activation_id:
             # A API informa que a licença foi atualizada (ex.: nova chave gerada pelo admin)
-            return {
+            return jsonify({
                 "valid": False,
                 "update": True,
-                "new_data": registro,
+                "new_data": registro,  # Envia os dados atuais do registro (com nova chave, data, etc.)
                 "message": "Nova chave gerada. A licença será atualizada."
-            }
+            }), 200
+
         # Para chaves do tipo "Uso Único", verifica expiração
         if registro.get("tipo") == "Uso Único":
             try:
                 activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
             except Exception as e:
-                raise HTTPException(status_code=400, detail="Data de ativação inválida.")
-            expiration_date = activation_date + timedelta(days=1)
+                print("Erro ao converter data_ativacao:", e)
+                return jsonify({"valid": False, "message": "Data de ativação inválida."}), 400
+            expiration_date = activation_date + datetime.timedelta(days=1)
             if datetime.datetime.now() > expiration_date:
-                return {"valid": False, "message": "Chave expirada."}
-        return {
+                return jsonify({"valid": False, "message": "Chave expirada."}), 400
+
+        return jsonify({
             "valid": True,
             "tipo": registro.get("tipo"),
             "data_ativacao": registro.get("data_ativacao"),
             "activation_id": registro.get("activation_id"),
             "message": "Chave validada com sucesso."
-        }
+        }), 200
 
     # Fluxo para primeira ativação (sem HWID definido)
     now_dt = datetime.datetime.now().isoformat()
@@ -187,49 +174,84 @@ async def validate(request: Request):
     try:
         update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
         if not update_res.data:
-            raise HTTPException(status_code=500, detail="Erro ao atualizar registro: Dados não retornados")
+            print("Erro: atualização retornou dados vazios.")
+            return jsonify({
+                "error": "Erro ao atualizar registro",
+                "details": "Dados não retornados"
+            }), 500
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao atualizar registro: {str(e)}")
+        print("Exceção ao atualizar registro:", e)
+        return jsonify({
+            "error": "Erro ao atualizar registro",
+            "details": str(e)
+        }), 500
         
     registro.update(update_data)
-    return {
+    return jsonify({
         "valid": True,
         "tipo": registro.get("tipo"),
         "data_ativacao": now_dt,
         "activation_id": new_activation_id,
         "message": "Chave validada com sucesso."
+    }), 200
+
+    # Fluxo para primeira ativação (sem HWID definido)
+    now_dt = datetime.datetime.now().isoformat()
+    new_activation_id = generate_activation_id(hwid_request, chave)
+    update_data = {
+        "hwid": hwid_request,
+        "activation_id": new_activation_id,
+        "data_ativacao": now_dt
     }
+    try:
+        update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
+        if not update_res.data:
+            print("Erro: atualização retornou dados vazios.")
+            return jsonify({
+                "error": "Erro ao atualizar registro",
+                "details": "Dados não retornados"
+            }), 500
+    except Exception as e:
+        print("Exceção ao atualizar registro:", e)
+        return jsonify({
+            "error": "Erro ao atualizar registro",
+            "details": str(e)
+        }), 500
+        
+    registro.update(update_data)
+    return jsonify({
+        "valid": True,
+        "tipo": registro.get("tipo"),
+        "data_ativacao": now_dt,
+        "activation_id": new_activation_id,
+        "message": "Chave validada com sucesso."
+    }), 200
 
-
-@app.get("/buys")
-async def get_buys():
+@app.route('/buys', methods=['GET'])
+def get_buys():
     global pending_buys
     compras = pending_buys.copy()
     pending_buys.clear()
-    return compras
+    return jsonify(compras), 200
 
+@app.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({"status": "alive"}), 200
 
-@app.get("/ping")
-async def ping():
-    return {"status": "alive"}
+@app.route('/', methods=['GET', 'HEAD', 'POST'])
+def index():
+    return jsonify({"message": "API de chaves rodando."}), 200
 
-
-@app.api_route("/", methods=["GET", "POST", "HEAD"])
-async def index():
-    return {"message": "API de chaves rodando."}
-
-
-@app.post("/stripe-webhook")
-async def stripe_webhook(request: Request):
-    payload_bytes = await request.body()
-    payload = payload_bytes.decode("utf-8")
+@app.route("/stripe-webhook", methods=["POST"])
+def stripe_webhook():
+    payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
     except stripe.error.SignatureVerificationError as e:
-        return JSONResponse(status_code=400, content={"error": "Assinatura inválida"})
+        return jsonify({"error": "Assinatura inválida"}), 400
     except Exception as e:
-        return JSONResponse(status_code=400, content={"error": str(e)})
+        return jsonify({"error": str(e)}), 400
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
@@ -241,7 +263,7 @@ async def stripe_webhook(request: Request):
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
         registro = {
-            "hwid": "",
+            "hwid": "",  # Ainda não vinculado
             "chave": chave,
             "activation_id": activation_id,
             "data_ativacao": now_dt,
@@ -250,12 +272,13 @@ async def stripe_webhook(request: Request):
         try:
             res = supabase.table("activations").insert(registro).execute()
         except Exception as e:
-            return JSONResponse(status_code=500, content={"error": "Erro ao inserir registro via Stripe", "details": str(e)})
+            return jsonify({"error": "Erro ao inserir registro via Stripe", "details": str(e)}), 500
 
         if not res.data:
-            return JSONResponse(status_code=500, content={"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"})
+            return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
 
         session_id = session.get("id")
+        # Armazena os dados da sessão para a página de sucesso
         session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/D")}
         compra = {
             "comprador": session.get("customer_details", {}).get("email", "N/D"),
@@ -266,22 +289,22 @@ async def stripe_webhook(request: Request):
             "checkout_url": checkout_link
         }
         pending_buys.append(compra)
-        return {"status": "success", "session_id": session_id, "chave": chave}
-    return {"status": "ignored"}
+        return jsonify({"status": "success", "session_id": session_id, "chave": chave}), 200
+    return jsonify({"status": "ignored"}), 200
 
-
-@app.get("/sucesso", response_class=HTMLResponse)
-async def sucesso(session_id: str = Query(None)):
+@app.route("/sucesso", methods=["GET"])
+def sucesso():
+    session_id = request.args.get("session_id")
     if not session_id:
-        return HTMLResponse(content="<h1>Erro:</h1><p>session_id é necessário.</p>", status_code=400)
+        return "<h1>Erro:</h1><p>session_id é necessário.</p>", 400
     data = session_keys.get(session_id)
     if not data:
-        return HTMLResponse(content="<h1>Erro:</h1><p>Chave não encontrada para a sessão fornecida.</p>", status_code=404)
+        return "<h1>Erro:</h1><p>Chave não encontrada para a sessão fornecida.</p>", 404
     chave = data["chave"]
     id_compra = data["id_compra"]
     res = supabase.table("activations").select("*").eq("chave", chave).execute()
     if not res.data:
-        return HTMLResponse(content="<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", status_code=404)
+        return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
     registro = res.data[0]
     html = f"""
     <!DOCTYPE html>
@@ -349,13 +372,10 @@ async def sucesso(session_id: str = Query(None)):
     </body>
     </html>
     """
-    return HTMLResponse(content=html)
+    return html
 
-# ==================================
-# ENDPOINTS ADMINISTRATIVOS (/auth-hwid)
-# ==================================
+# === ENDPOINTS ADMINISTRATIVOS (/auth-hwid) ===
 
-# Template HTML (utilizando sintaxe do Jinja2)
 DARK_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -380,7 +400,7 @@ DARK_TEMPLATE = """
         {% if not authenticated %}
         <div class="login-box">
             <h2>Admin Login</h2>
-            <form method="post" action="/auth-hwid">
+            <form method="post" action="{{ url_for('auth_hwid') }}">
                 <input type="password" name="password" placeholder="Senha de Admin" required>
                 <input type="submit" value="Entrar">
             </form>
@@ -405,7 +425,7 @@ DARK_TEMPLATE = """
                 <td>{{ r.data_ativacao or "N/D" }}</td>
                 <td>
                     {% if not r.authorized %}
-                    <form method="post" action="/auth-hwid/authorize">
+                    <form method="post" action="{{ url_for('auth_hwid_authorize') }}">
                         <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
                         <input type="hidden" name="password" value="{{ admin_password }}">
                         <input type="submit" value="Autorizar">
@@ -423,80 +443,63 @@ DARK_TEMPLATE = """
 </html>
 """
 
-@app.post("/auth-hwid", response_class=HTMLResponse)
-@app.get("/auth-hwid", response_class=HTMLResponse)
-async def auth_hwid(request: Request, password: str = Query(None)):
+@app.route("/auth-hwid", methods=["GET", "POST"])
+def auth_hwid():
     authenticated = False
     admin_pass = None
     if request.method == "POST":
-        form = await request.form()
-        admin_pass = form.get("password")
+        admin_pass = request.form.get("password")
         if admin_pass == ADMIN_PASSWORD:
             authenticated = True
         else:
-            return templates.TemplateResponse(
-                "auth_hwid.html",
-                {"request": request, "authenticated": False},
-                status_code=401
-            )
+            return render_template_string(DARK_TEMPLATE, authenticated=False), 401
     else:
-        admin_pass = password
+        admin_pass = request.args.get("password")
         if admin_pass == ADMIN_PASSWORD:
             authenticated = True
     if not authenticated:
-        return templates.TemplateResponse(
-            "auth_hwid.html",
-            {"request": request, "authenticated": False}
-        )
+        return render_template_string(DARK_TEMPLATE, authenticated=False)
     result = supabase.table("activations").select("*").execute()
     records = result.data if result.data else []
-    return templates.TemplateResponse(
-        "auth_hwid.html",
-        {"request": request, "authenticated": True, "records": records, "admin_password": ADMIN_PASSWORD}
-    )
+    return render_template_string(DARK_TEMPLATE, authenticated=True, records=records, admin_password=ADMIN_PASSWORD)
 
-@app.post("/auth-hwid/authorize", response_class=HTMLResponse)
-async def auth_hwid_authorize(request: Request):
-    # Tenta obter dados do formulário ou JSON
-    form = await request.form()
-    admin_pass = form.get("password")
-    if not admin_pass:
-        try:
-            data = await request.json()
-            admin_pass = data.get("password")
-        except Exception:
-            pass
+@app.route("/auth-hwid/authorize", methods=["POST"])
+def auth_hwid_authorize():
+    # Obter a senha administrativa (do form ou JSON)
+    admin_pass = request.form.get("password") or (request.json or {}).get("password")
     if admin_pass != ADMIN_PASSWORD:
-        return HTMLResponse(content="<h1>Acesso não autorizado</h1>", status_code=401)
-    activation_id_old = form.get("activation_id")
+        return "<h1>Acesso não autorizado</h1>", 401
+
+    # Obter o activation_id do registro a ser revogado
+    activation_id_old = request.form.get("activation_id") or (request.json or {}).get("activation_id")
     if not activation_id_old:
-        try:
-            data = await request.json()
-            activation_id_old = data.get("activation_id")
-        except Exception:
-            pass
-    if not activation_id_old:
-        return HTMLResponse(content="<h1>Activation ID não informado</h1>", status_code=400)
+        return "<h1>Activation ID não informado</h1>", 400
+
+    # Consulta o registro antigo no Supabase
     res = supabase.table("activations").select("*").eq("activation_id", activation_id_old).execute()
     if not res.data:
-        return HTMLResponse(content="<h1>Registro não encontrado</h1>", status_code=404)
+        return "<h1>Registro não encontrado</h1>", 404
+
     # Marcar o registro antigo como revogado
     revoke_update = {"revoked": True}
     supabase.table("activations").update(revoke_update).eq("activation_id", activation_id_old).execute()
-    # Gerar nova chave do tipo LifeTime
+
+    # Gerar nova chave do tipo LifeTime (o client calculará ID, HWID, etc)
     new_key = generate_key()
     new_activation_id = generate_activation_id("", new_key)  # sem HWID
     new_record = {
-        "hwid": "",
+        "hwid": "",  # Ainda não vinculado
         "chave": new_key,
         "activation_id": new_activation_id,
-        "data_ativacao": None,
+        "data_ativacao": None,  # Sem ativação ainda
         "tipo": "LifeTime",
-        "revoked": False
+        "revoked": False  # Nova licença válida
     }
     insert_res = supabase.table("activations").insert(new_record).execute()
     if not insert_res.data:
-        return HTMLResponse(content=f"<h1>Erro ao inserir novo registro: {insert_res}</h1>", status_code=500)
+        return f"<h1>Erro ao inserir novo registro: {insert_res}</h1>", 500
+
+    # Retornar a nova chave em HTML
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -537,9 +540,7 @@ async def auth_hwid_authorize(request: Request):
     </body>
     </html>
     """
-    return HTMLResponse(content=response_html, status_code=200)
+    return response_html, 200
 
-# Caso queira executar via comando "python nome_do_arquivo.py"
 if __name__ == '__main__':
-    import uvicorn
-    uvicorn.run("main:API", host="0.0.0.0", port=8000, reload=True)
+    app.run(host="0.0.0.0")
