@@ -442,16 +442,15 @@ async def auth_hwid(request: Request, password: str = Query(None)):
             authenticated = True
     if not authenticated:
         return templates.TemplateResponse(
-            template_name="auth_hwid.html", 
-            context={"request": request, "authenticated": False}
+            "auth_hwid.html",
+            {"request": request, "authenticated": False}
         )
     result = supabase.table("activations").select("*").execute()
     records = result.data if result.data else []
     return templates.TemplateResponse(
-        template_name="auth_hwid.html", 
-        context={"request": request, "authenticated": True, "records": records, "admin_password": ADMIN_PASSWORD}
+        "auth_hwid.html",
+        {"request": request, "authenticated": True, "records": records, "admin_password": ADMIN_PASSWORD}
     )
-
 
 @app.post("/auth-hwid/authorize", response_class=HTMLResponse)
 async def auth_hwid_authorize(request: Request):
