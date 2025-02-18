@@ -18,8 +18,11 @@ load_dotenv()
 # Inicializa o FastAPI
 app = FastAPI()
 
-templates_dir = os.environ.get("TEMPLATES_DIR", "templates")
-templates = Jinja2Templates(directory=templates_dir)
+# Obtém o diretório onde este arquivo está localizado
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Define o diretório de templates (pode ser configurado via variável de ambiente)
+TEMPLATES_DIR = os.environ.get("TEMPLATES_DIR", os.path.join(BASE_DIR, "templates"))
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # === VARIÁVEIS DE AMBIENTE ===
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
