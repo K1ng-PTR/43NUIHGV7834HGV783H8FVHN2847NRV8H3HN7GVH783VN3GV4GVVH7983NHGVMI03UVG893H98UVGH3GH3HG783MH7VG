@@ -18,8 +18,8 @@ load_dotenv()
 # Inicializa o FastAPI
 app = FastAPI()
 
-# Configura templates Jinja2 (usado para os endpoints HTML)
-templates = Jinja2Templates(directory="templates")
+templates_dir = os.environ.get("TEMPLATES_DIR", "templates")
+templates = Jinja2Templates(directory=templates_dir)
 
 # === VARIÁVEIS DE AMBIENTE ===
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
