@@ -259,7 +259,7 @@ def stripe_webhook():
         metadata = session.get("metadata", {})
         checkout_link = metadata.get("checkout_link", "")
         # Define o tipo conforme sua lógica
-        tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/test_6oE9E70jrdL47cseV7" else "LifeTime"
+        tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/14k7tX60H3QE6kg14b" else "LifeTime"
         now_dt = datetime.datetime.now().isoformat()
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
