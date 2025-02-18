@@ -431,11 +431,11 @@ async def auth_hwid(request: Request, password: str = Query(None)):
         if admin_pass == ADMIN_PASSWORD:
             authenticated = True
         else:
-            # Renderiza a página de login com status não autenticado
             return templates.TemplateResponse(
-                template_name="auth_hwid.html", 
-                context={"request": request, "authenticated": False}
-            , status_code=401)
+                "auth_hwid.html",
+                {"request": request, "authenticated": False},
+                status_code=401
+            )
     else:
         admin_pass = password
         if admin_pass == ADMIN_PASSWORD:
