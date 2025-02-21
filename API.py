@@ -112,10 +112,10 @@ def validate():
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
     except Exception as e:
         print("Erro ao consultar o banco:", e)
-        return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
+        return jsonify({"error": , "details": str(e)}), 500
 
     if not res.data:
-        return jsonify({"valid": False, "message": "Chave inválida."}), 400
+        return jsonify({"valid": False, "message": "invalid Key."}), 400
 
     registro = res.data[0]
 
