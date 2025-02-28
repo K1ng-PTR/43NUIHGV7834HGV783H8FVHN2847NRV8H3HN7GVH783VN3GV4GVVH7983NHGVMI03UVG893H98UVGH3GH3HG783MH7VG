@@ -309,16 +309,16 @@ def sucesso():
     registro = res.data[0]
     html = f"""
     <!DOCTYPE html>
-    <html lang="pt-BR">
+    <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Pagamento Confirmado</title>
+      <title>Payment Confirmed</title>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
       <style>
-        body {{
+        body {
           margin: 0;
           padding: 0;
           font-family: 'Montserrat', sans-serif;
@@ -328,8 +328,8 @@ def sucesso():
           justify-content: center;
           height: 100vh;
           color: #333;
-        }}
-        .card {{
+        }
+        .card {
           background: rgba(255, 255, 255, 0.9);
           backdrop-filter: blur(10px);
           border-radius: 15px;
@@ -337,17 +337,17 @@ def sucesso():
           box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
           max-width: 500px;
           text-align: center;
-        }}
-        .card h1 {{
+        }
+        .card h1 {
           font-size: 2.5rem;
           margin-bottom: 0.5rem;
           color: #1c92d2;
-        }}
-        .card p {{
+        }
+        .card p {
           font-size: 1.1rem;
           margin-bottom: 1rem;
-        }}
-        .key {{
+        }
+        .key {
           font-size: 1.8rem;
           font-weight: bold;
           color: #f2994a;
@@ -357,18 +357,23 @@ def sucesso():
           display: inline-block;
           margin: 1rem 0;
           letter-spacing: 0.1rem;
-        }}
+        }
+        .purchase-id {
+          display: inline-block;
+          text-align: center;
+          margin: 1rem auto;
+        }
       </style>
     </head>
     <body>
       <div class="card">
-        <h1>Pagamento Confirmado!</h1>
-        <p>Tipo de compra: <strong>{registro.get("tipo")}</strong></p>
-        <p>Sua chave:</p>
+        <h1>Payment Confirmed!</h1>
+        <p>Purchase Type: <strong>{registro.get("tipo")}</strong></p>
+        <p>Your Key:</p>
         <div class="key">{chave}</div>
         <p><strong>Purchase ID:</strong></p>
-        <p>{id_compra}</p>
-        <p>Data de Ativação: <strong>{registro.get("data_ativacao")}</strong></p>
+        <p class="purchase-id">{id_compra}</p>
+        <p>Activation Date: <strong>{registro.get("data_ativacao")}</strong></p>
       </div>
     </body>
     </html>
