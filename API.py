@@ -297,15 +297,15 @@ def stripe_webhook():
 def sucesso():
     session_id = request.args.get("session_id")
     if not session_id:
-        return "<h1>Erro:</h1><p>session_id é necessário.</p>", 400
+        return "<h1>Error:</h1><p>session_id is required.</p>", 400
     data = session_keys.get(session_id)
     if not data:
-        return "<h1>Erro:</h1><p>Chave não encontrada para a sessão fornecida.</p>", 404
+        return "<h1>Error:</h1><p>Key not found for the provided session.</p>", 404
     chave = data["chave"]
     id_compra = data["id_compra"]
     res = supabase.table("activations").select("*").eq("chave", chave).execute()
     if not res.data:
-        return "<h1>Erro:</h1><p>Detalhes da chave não encontrados.</p>", 404
+        return "<h1>Error:</h1><p>Key details not found.</p>", 404
     registro = res.data[0]
     html = f"""
     <!DOCTYPE html>
@@ -318,7 +318,7 @@ def sucesso():
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
       <style>
-        body {
+        body {{
           margin: 0;
           padding: 0;
           font-family: 'Montserrat', sans-serif;
@@ -328,8 +328,8 @@ def sucesso():
           justify-content: center;
           height: 100vh;
           color: #333;
-        }
-        .card {
+        }}
+        .card {{
           background: rgba(255, 255, 255, 0.9);
           backdrop-filter: blur(10px);
           border-radius: 15px;
@@ -337,17 +337,17 @@ def sucesso():
           box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
           max-width: 500px;
           text-align: center;
-        }
-        .card h1 {
+        }}
+        .card h1 {{
           font-size: 2.5rem;
           margin-bottom: 0.5rem;
           color: #1c92d2;
-        }
-        .card p {
+        }}
+        .card p {{
           font-size: 1.1rem;
           margin-bottom: 1rem;
-        }
-        .key {
+        }}
+        .key {{
           font-size: 1.8rem;
           font-weight: bold;
           color: #f2994a;
@@ -357,12 +357,13 @@ def sucesso():
           display: inline-block;
           margin: 1rem 0;
           letter-spacing: 0.1rem;
-        }
-        .purchase-id {
+        }}
+        .purchase-id {{
           display: inline-block;
           text-align: center;
           margin: 1rem auto;
-        }
+          width: fit-content;
+        }}
       </style>
     </head>
     <body>
@@ -379,7 +380,7 @@ def sucesso():
     </html>
     """
     return html
-
+    
 # === ENDPOINTS ADMINISTRATIVOS (/auth-hwid) ===
 
 DARK_TEMPLATE = """
