@@ -309,73 +309,55 @@ def sucesso():
     registro = res.data[0]
     html = f"""
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="pt">
     <head>
       <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Payment Confirmed</title>
-      <link rel="preconnect" href="https://fonts.googleapis.com">
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-      <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+      <title>Chave de 5x5</title>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet" />
+      <script src="https://cdn.tailwindcss.com"></script>
       <style>
-        body {{
-          margin: 0;
-          padding: 0;
-          font-family: 'Montserrat', sans-serif;
-          background: linear-gradient(135deg, #1c92d2, #f2fcfe);
+        body {
+          background: linear-gradient(135deg, #1c1b1b 0%, #2b2a2a 100%);
           display: flex;
-          align-items: center;
           justify-content: center;
+          align-items: center;
           height: 100vh;
-          color: #333;
-        }}
-        .card {{
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(10px);
-          border-radius: 15px;
-          padding: 2rem;
-          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-          max-width: 500px;
+          font-family: 'Playfair Display', serif;
+          color: #f5e7c8;
+        }
+        .chave {
+          font-size: 2em;
+          border-radius: 50px;
+          padding: 10px;
+          background-color: #2b2b2b;
+          border: 2px solid #bfa560;
+          box-shadow: 0 0 10px rgba(191, 165, 96, 0.4);
           text-align: center;
-        }}
-        .card h1 {{
-          font-size: 2.5rem;
-          margin-bottom: 0.5rem;
-          color: #1c92d2;
-        }}
-        .card p {{
-          font-size: 1.1rem;
-          margin-bottom: 1rem;
-        }}
-        .key {{
-          font-size: 1.8rem;
-          font-weight: bold;
-          color: #f2994a;
-          background: #fff;
-          padding: 0.5rem 1rem;
-          border-radius: 5px;
-          display: inline-block;
-          margin: 1rem 0;
-          letter-spacing: 0.1rem;
-        }}
-        .purchase-id {{
-          display: inline-block;
-          text-align: center;
-          margin: 1rem auto;
-          width: fit-content;
-        }}
+          width: 560px;
+          letter-spacing: 3px;
+        }
+        .botao-copiar {
+          margin-top: 20px;
+          padding: 10px 20px;
+          background-color: #2b2b2b;
+          border: 2px solid #bfa560;
+          border-radius: 8px;
+          color: #f5e7c8;
+          cursor: pointer;
+        }
       </style>
     </head>
     <body>
-      <div class="card">
-        <h1>Payment Confirmed!</h1>
-        <p>Purchase Type: <strong>{registro.get("tipo")}</strong></p>
-        <p>Your Key:</p>
-        <div class="key">{chave}</div>
-        <p><strong>Purchase ID:</strong></p>
-        <p class="purchase-id">{id_compra}</p>
-        <p>Activation Date: <strong>{registro.get("data_ativacao")}</strong></p>
+      <div class="container">
+        <div class="chave" id="chave">{{ chave }}</div>
+        <button class="botao-copiar" onclick="copyKey()">Copiar Chave</button>
       </div>
+      <script>
+        function copyKey() {
+          navigator.clipboard.writeText("{{ chave }}");
+          alert("Chave copiada!");
+        }
+      </script>
     </body>
     </html>
     """
