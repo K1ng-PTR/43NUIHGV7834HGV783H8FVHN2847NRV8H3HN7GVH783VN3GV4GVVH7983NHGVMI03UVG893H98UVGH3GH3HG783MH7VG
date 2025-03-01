@@ -311,53 +311,256 @@ def sucesso():
     <!DOCTYPE html>
     <html lang="pt">
     <head>
-      <meta charset="UTF-8">
-      <title>Chave de 5x5</title>
-      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet" />
-      <script src="https://cdn.tailwindcss.com"></script>
-      <style>
-        body {{
-          background: linear-gradient(135deg, #1c1b1b 0%, #2b2a2a 100%);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100vh;
-          font-family: 'Playfair Display', serif;
-          color: #f5e7c8;
-        }}
-        .chave {{
-          font-size: 2em;
-          border-radius: 50px;
-          padding: 10px;
-          background-color: #2b2b2b;
-          border: 2px solid #bfa560;
-          box-shadow: 0 0 10px rgba(191, 165, 96, 0.4);
-          text-align: center;
-          width: 560px;
-          letter-spacing: 3px;
-        }}
-        .botao-copiar {{
-          margin-top: 20px;
-          padding: 10px 20px;
-          background-color: #2b2b2b;
-          border: 2px solid #bfa560;
-          border-radius: 8px;
-          color: #f5e7c8;
-          cursor: pointer;
-        }}
-      </style>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sua Chave de Ativação</title>
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+        <style>
+            :root {{
+                --primary: #bfa560;
+                --dark: #1c1b1b;
+                --darker: #141414;
+                --light: #f5e7c8;
+                --success: #4caf50;
+                --shadow: rgba(191, 165, 96, 0.25);
+            }}
+            
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+            
+            body {{
+                background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+                min-height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-family: 'Poppins', sans-serif;
+                color: var(--light);
+                padding: 20px;
+            }}
+            
+            .container {{
+                width: 100%;
+                max-width: 600px;
+                animation: fadeIn 0.6s ease-out;
+            }}
+            
+            .card {{
+                background-color: rgba(43, 43, 43, 0.8);
+                backdrop-filter: blur(10px);
+                border: 2px solid var(--primary);
+                border-radius: 16px;
+                box-shadow: 0 8px 32px var(--shadow);
+                padding: 2.5rem;
+                text-align: center;
+            }}
+            
+            .success-icon {{
+                color: var(--success);
+                font-size: 3rem;
+                margin-bottom: 1rem;
+            }}
+            
+            h1 {{
+                font-size: 1.8rem;
+                font-weight: 700;
+                margin-bottom: 1.5rem;
+                color: var(--primary);
+            }}
+            
+            p {{
+                margin-bottom: 1.5rem;
+                font-size: 1rem;
+                opacity: 0.9;
+                line-height: 1.6;
+            }}
+            
+            .key-container {{
+                position: relative;
+                margin: 2rem 0;
+            }}
+            
+            .key-display {{
+                background-color: rgba(0, 0, 0, 0.3);
+                border: 1px solid var(--primary);
+                border-radius: 12px;
+                padding: 1rem;
+                font-family: monospace;
+                font-size: 1.4rem;
+                letter-spacing: 2px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                user-select: all;
+                transition: all 0.3s ease;
+                cursor: pointer;
+            }}
+            
+            .key-display:hover {{
+                background-color: rgba(0, 0, 0, 0.5);
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px var(--shadow);
+            }}
+            
+            .btn {{
+                display: inline-block;
+                background-color: var(--primary);
+                color: var(--dark);
+                border: none;
+                padding: 0.8rem 1.5rem;
+                font-size: 1rem;
+                font-weight: 600;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 6px var(--shadow);
+            }}
+            
+            .btn:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 7px 10px var(--shadow);
+            }}
+            
+            .btn:active {{
+                transform: translateY(1px);
+            }}
+            
+            .copy-notification {{
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background-color: var(--success);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+                opacity: 0;
+                transition: opacity 0.3s ease;
+                z-index: 1000;
+            }}
+            
+            .copy-notification.show {{
+                opacity: 1;
+            }}
+            
+            .instructions {{
+                border-top: 1px solid rgba(191, 165, 96, 0.3);
+                margin-top: 2rem;
+                padding-top: 1.5rem;
+                text-align: left;
+            }}
+            
+            .instructions h2 {{
+                font-size: 1.2rem;
+                margin-bottom: 1rem;
+                color: var(--primary);
+            }}
+            
+            .instructions ol {{
+                margin-left: 1.5rem;
+                margin-bottom: 1.5rem;
+            }}
+            
+            .instructions li {{
+                margin-bottom: 0.5rem;
+            }}
+            
+            footer {{
+                margin-top: 2rem;
+                font-size: 0.9rem;
+                opacity: 0.7;
+            }}
+            
+            @keyframes fadeIn {{
+                from {{ opacity: 0; transform: translateY(20px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
+            
+            @media (max-width: 640px) {{
+                .card {{
+                    padding: 1.5rem;
+                }}
+                
+                h1 {{
+                    font-size: 1.5rem;
+                }}
+                
+                .key-display {{
+                    font-size: 1rem;
+                    padding: 0.8rem;
+                }}
+            }}
+        </style>
     </head>
     <body>
-      <div class="container">
-        <div class="chave" id="chave">{chave}</div>
-        <button class="botao-copiar" onclick="copyKey()">Copiar Chave</button>
-      </div>
-      <script>
-        function copyKey() {{
-          navigator.clipboard.writeText("{chave}");
-          alert("Chave copiada!");
-        }}
-      </script>
+        <div class="container">
+            <div class="card">
+                <div class="success-icon">✓</div>
+                <h1>Compra Concluída com Sucesso!</h1>
+                <p>Obrigado pela sua compra. Sua chave de ativação está pronta para uso.</p>
+                
+                <div class="key-container">
+                    <div class="key-display" id="chave" onclick="copyKey()">{chave}</div>
+                </div>
+                
+                <button class="btn" onclick="copyKey()">Copiar Chave</button>
+                
+                <div class="instructions">
+                    <h2>Como utilizar sua chave:</h2>
+                    <ol>
+                        <li>Abra o aplicativo que você deseja ativar</li>
+                        <li>Navegue até a tela de ativação</li>
+                        <li>Cole a chave no campo indicado</li>
+                        <li>Clique em ativar para completar o processo</li>
+                    </ol>
+                </div>
+                
+                <footer>
+                    ID da transação: {id_compra}
+                </footer>
+            </div>
+        </div>
+        
+        <div class="copy-notification" id="notification">
+            Chave copiada com sucesso!
+        </div>
+        
+        <script>
+            function copyKey() {{
+                const keyText = "{chave}";
+                navigator.clipboard.writeText(keyText)
+                    .then(() => {{
+                        const notification = document.getElementById('notification');
+                        notification.classList.add('show');
+                        
+                        // Highlight effect on the key
+                        const keyDisplay = document.getElementById('chave');
+                        keyDisplay.style.backgroundColor = 'rgba(76, 175, 80, 0.2)';
+                        
+                        setTimeout(() => {{
+                            notification.classList.remove('show');
+                            keyDisplay.style.backgroundColor = '';
+                        }}, 2000);
+                    }})
+                    .catch(err => {{
+                        console.error('Erro ao copiar: ', err);
+                        alert('Não foi possível copiar automaticamente. Por favor, selecione a chave manualmente e copie.');
+                    }});
+            }}
+            
+            // Allow copying by clicking anywhere on the key
+            document.getElementById('chave').addEventListener('click', function(e) {{
+                const range = document.createRange();
+                range.selectNode(this);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                copyKey();
+            }});
+        </script>
     </body>
     </html>
     """
