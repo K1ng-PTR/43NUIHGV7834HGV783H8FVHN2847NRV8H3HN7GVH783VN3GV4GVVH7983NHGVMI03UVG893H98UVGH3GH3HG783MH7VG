@@ -390,23 +390,24 @@ DARK_TEMPLATE = """
     <meta charset="UTF-8">
     <title>Administração - Auth HWID</title>
     <style>
-        body { background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; }
-        .container { width: 90%; margin: auto; padding: 20px; }
+        body { background: linear-gradient(135deg, #1c1b1b 0%, #2b2a2a 100%); color: #f5e7c8; font-family: 'Arial', serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .container { text-align: center; width: 600px !important; background-color: #2b2b2b; border: 2px solid #bfa560; box-shadow: 0 0 10px rgba(191, 165, 96, 0.4); padding: 20px; border-radius: 10px; }
+        .adm {font-size: 20px;}
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #333; padding: 8px; text-align: center; }
         th { background-color: #1e1e1e; }
         tr:nth-child(even) { background-color: #1e1e1e; }
         a.button { background-color: #EA5656; color: #fff; padding: 6px 12px; text-decoration: none; border-radius: 4px; }
         .login-box { margin: 50px auto; width: 300px; padding: 20px; background-color: #1e1e1e; border-radius: 8px; }
-        input[type="password"] { width: 100%; padding: 8px; margin: 10px 0; }
-        input[type="submit"] { background-color: #EA5656; color: #fff; border: none; padding: 10px; width: 100%; cursor: pointer; }
+        input[type="password"] { background-color: #3a3a3a; color: #f5e7c8; }
+        input[type="submit"] { background-color: #bfa560; color: #2b2b2b; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="container">
         {% if not authenticated %}
         <div class="login-box">
-            <h2>Admin Login</h2>
+            <h2 class="adm">Admin Login</h2>
             <form method="post" action="{{ url_for('auth_hwid') }}">
                 <input type="password" name="password" placeholder="Senha de Admin" required>
                 <input type="submit" value="Entrar">
