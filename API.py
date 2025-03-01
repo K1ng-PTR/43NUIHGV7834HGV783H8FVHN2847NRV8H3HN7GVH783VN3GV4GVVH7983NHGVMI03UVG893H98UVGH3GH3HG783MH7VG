@@ -349,12 +349,12 @@ def sucesso():
     </head>
     <body>
       <div class="container">
-        <div class="chave" id="chave">{{ chave }}</div>
+        <div class="chave" id="chave">{chave}</div>
         <button class="botao-copiar" onclick="copyKey()">Copiar Chave</button>
       </div>
       <script>
         function copyKey() {
-          navigator.clipboard.writeText("{{ chave }}");
+          navigator.clipboard.writeText("{chave}");
           alert("Chave copiada!");
         }
       </script>
