@@ -307,7 +307,7 @@ def sucesso():
     if not res.data:
         return "<h1>Error:</h1><p>Key details not found.</p>", 404
     registro = res.data[0]
-    html = """
+    html = f"""
     <!DOCTYPE html>
     <html lang="pt">
     <head>
@@ -316,7 +316,7 @@ def sucesso():
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet" />
       <script src="https://cdn.tailwindcss.com"></script>
       <style>
-        body {
+        body {{
           background: linear-gradient(135deg, #1c1b1b 0%, #2b2a2a 100%);
           display: flex;
           justify-content: center;
@@ -324,8 +324,8 @@ def sucesso():
           height: 100vh;
           font-family: 'Playfair Display', serif;
           color: #f5e7c8;
-        }
-        .chave {
+        }}
+        .chave {{
           font-size: 2em;
           border-radius: 50px;
           padding: 10px;
@@ -335,8 +335,8 @@ def sucesso():
           text-align: center;
           width: 560px;
           letter-spacing: 3px;
-        }
-        .botao-copiar {
+        }}
+        .botao-copiar {{
           margin-top: 20px;
           padding: 10px 20px;
           background-color: #2b2b2b;
@@ -344,7 +344,7 @@ def sucesso():
           border-radius: 8px;
           color: #f5e7c8;
           cursor: pointer;
-        }
+        }}
       </style>
     </head>
     <body>
@@ -353,10 +353,10 @@ def sucesso():
         <button class="botao-copiar" onclick="copyKey()">Copiar Chave</button>
       </div>
       <script>
-        function copyKey() {
+        function copyKey() {{
           navigator.clipboard.writeText("{chave}");
           alert("Chave copiada!");
-        }
+        }}
       </script>
     </body>
     </html>
