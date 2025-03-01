@@ -307,7 +307,7 @@ def sucesso():
     if not res.data:
         return "<h1>Error:</h1><p>Key details not found.</p>", 404
     registro = res.data[0]
-    html = f"""
+    html = """
     <!DOCTYPE html>
     <html lang="pt">
     <head>
