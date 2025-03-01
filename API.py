@@ -388,7 +388,7 @@ DARK_TEMPLATE = """
 <body>
     <div class="container">
         {% if not authenticated %}
-        <div class="container" id="login-bo">
+        <div id="login-box">
             <h2 class="adm">Admin Login</h2>
             <form method="post" action="{{ url_for('auth_hwid') }}">
                 <input type="password" name="password" placeholder="Senha de Admin" required>
