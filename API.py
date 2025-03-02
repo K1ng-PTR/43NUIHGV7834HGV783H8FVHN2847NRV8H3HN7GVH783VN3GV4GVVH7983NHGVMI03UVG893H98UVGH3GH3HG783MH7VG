@@ -254,8 +254,17 @@ def index():
     return jsonify({"message": "API de chaves rodando."}), 200
 
 # Se alguma das variáveis de email não estiver definida, mostre um aviso
-if not all([EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD]):
-    print("AVISO: Configurações de email incompletas. O envio de emails pode não funcionar.")
+import smtplib
+import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+# Variáveis para configuração de email (precisam ser definidas antes de usar a função)
+EMAIL_HOST = ""  # Exemplo: "smtp.gmail.com"
+EMAIL_PORT = 587  # Porta padrão para TLS
+EMAIL_USER = ""  # Seu endereço de email
+EMAIL_PASSWORD = ""  # Sua senha
+EMAIL_FROM = ""  # Nome e email do remetente
 
 def send_key_email(recipient_email, key, key_type, transaction_id):
     """
@@ -277,8 +286,12 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
     # Prepara o assunto do email
     subject = "Chave de Ativação - Compra Concluída ✅"
     
-    # Prepara o corpo do email em HTML
-    html_content = """
+    # Data da compra formatada
+    purchase_date = datetime.datetime.now().strftime('%d/%m/%Y %H:%M')
+    current_year = datetime.datetime.now().year
+    
+    # Prepara o corpo do email em HTML com f-strings para inserção segura de variáveis
+    html_content = f"""
     <!DOCTYPE html>
     <html lang="pt">
     <head>
@@ -287,47 +300,47 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
         <title>Sua Chave de Ativação</title>
         <style>
             /* Sistema de cores */
-            :root {
+            :root {{
                 --dark: #171717;
                 --accent: #7642ee;
                 --light: #f8f8f8;
                 --gray: #9ca3af;
                 --success: #0cce6b;
                 --border: #e5e5e5;
-            }
+            }}
             
-            * {
+            * {{
                 margin: 0;
                 padding: 0;
                 box-sizing: border-box;
-            }
+            }}
             
-            body {
+            body {{
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
                 line-height: 1.5;
                 color: var(--dark);
                 background-color: #ffffff;
                 -webkit-font-smoothing: antialiased;
                 -moz-osx-font-smoothing: grayscale;
-            }
+            }}
             
-            .wrapper {
+            .wrapper {{
                 max-width: 600px;
                 margin: 0 auto;
                 background-color: #ffffff;
-            }
+            }}
             
-            .email-container {
+            .email-container {{
                 padding: 40px;
-            }
+            }}
             
-            .header {
+            .header {{
                 text-align: center;
                 margin-bottom: 40px;
                 position: relative;
-            }
+            }}
             
-            .success-badge {
+            .success-badge {{
                 display: inline-block;
                 background-color: var(--success);
                 border-radius: 50%;
@@ -335,9 +348,9 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
                 height: 60px;
                 margin-bottom: 20px;
                 position: relative;
-            }
+            }}
             
-            .success-badge::after {
+            .success-badge::after {{
                 content: "✓";
                 position: absolute;
                 top: 50%;
@@ -346,104 +359,104 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
                 color: white;
                 font-size: 30px;
                 font-weight: bold;
-            }
+            }}
             
-            .header h1 {
+            .header h1 {{
                 font-size: 24px;
                 font-weight: 700;
                 letter-spacing: -0.5px;
                 margin-bottom: 10px;
-            }
+            }}
             
-            .header p {
+            .header p {{
                 color: var(--gray);
                 font-size: 16px;
-            }
+            }}
             
-            .divider {
+            .divider {{
                 height: 1px;
                 background-color: var(--border);
                 margin: 30px 0;
-            }
+            }}
             
-            .section {
+            .section {{
                 margin: 30px 0;
-            }
+            }}
             
-            .section-title {
+            .section-title {{
                 font-size: 14px;
                 text-transform: uppercase;
                 letter-spacing: 1.5px;
                 color: var(--gray);
                 margin-bottom: 15px;
                 font-weight: 600;
-            }
+            }}
             
-            .key-container {
+            .key-container {{
                 border: 2px dashed var(--accent);
                 border-radius: 6px;
                 padding: 20px;
                 text-align: center;
                 position: relative;
                 background-color: rgba(238, 66, 102, 0.05);
-            }
+            }}
             
-            .key {
+            .key {{
                 font-family: 'Courier New', monospace;
                 font-size: 20px;
                 font-weight: 700;
                 letter-spacing: 2px;
                 color: var(--accent);
                 word-break: break-all;
-            }
+            }}
             
-            .copy-hint {
+            .copy-hint {{
                 position: absolute;
                 top: 10px;
                 right: 10px;
                 font-size: 12px;
                 color: var(--gray);
-            }
+            }}
             
-            .details {
+            .details {{
                 display: grid;
                 grid-template-columns: 1fr;
                 gap: 15px;
                 margin: 30px 0;
-            }
+            }}
             
-            .detail-item {
+            .detail-item {{
                 display: flex;
                 flex-direction: column;
                 background-color: var(--light);
                 padding: 15px;
                 border-radius: 6px;
-            }
+            }}
             
-            .detail-label {
+            .detail-label {{
                 font-size: 14px;
                 color: var(--gray);
                 margin-bottom: 5px;
-            }
+            }}
             
-            .detail-value {
+            .detail-value {{
                 font-weight: 600;
                 color: var(--dark);
-            }
+            }}
             
-            .steps {
+            .steps {{
                 counter-reset: step;
                 margin: 30px 0;
-            }
+            }}
             
-            .step {
+            .step {{
                 position: relative;
                 padding-left: 40px;
                 margin-bottom: 25px;
                 counter-increment: step;
-            }
+            }}
             
-            .step::before {
+            .step::before {{
                 content: counter(step);
                 position: absolute;
                 left: 0;
@@ -458,19 +471,19 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
                 justify-content: center;
                 font-weight: 600;
                 font-size: 14px;
-            }
+            }}
             
-            .step h4 {
+            .step h4 {{
                 font-size: 16px;
                 margin-bottom: 5px;
-            }
+            }}
             
-            .step p {
+            .step p {{
                 color: var(--gray);
                 font-size: 14px;
-            }
+            }}
             
-            .cta-button {
+            .cta-button {{
                 display: block;
                 background-color: var(--accent);
                 color: white;
@@ -481,30 +494,30 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
                 font-weight: 600;
                 margin: 30px 0;
                 transition: background-color 0.2s;
-            }
+            }}
             
-            .cta-button:hover {
+            .cta-button:hover {{
                 background-color: #663cd9;
-            }
+            }}
             
-            .support-section {
+            .support-section {{
                 text-align: center;
                 margin: 40px 0;
-            }
+            }}
             
-            .support-section p {
+            .support-section p {{
                 margin-bottom: 20px;
                 color: var(--gray);
-            }
+            }}
             
-            .support-options {
+            .support-options {{
                 display: flex;
                 justify-content: center;
                 gap: 20px;
                 margin-top: 20px;
-            }
+            }}
             
-            .support-option {
+            .support-option {{
                 display: inline-block;
                 padding: 15px 20px;
                 border: 1px solid var(--border);
@@ -513,36 +526,36 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
                 color: var(--dark);
                 font-weight: 500;
                 transition: all 0.2s;
-            }
+            }}
             
-            .support-option:hover {
+            .support-option:hover {{
                 border-color: var(--accent);
                 color: var(--accent);
-            }
+            }}
             
-            .footer {
+            .footer {{
                 text-align: center;
                 color: var(--gray);
                 font-size: 12px;
                 margin-top: 50px;
                 padding-top: 30px;
                 border-top: 1px solid var(--border);
-            }
+            }}
             
-            .footer p {
+            .footer p {{
                 margin-bottom: 10px;
-            }
+            }}
             
-            @media only screen and (max-width: 480px) {
-                .email-container {
+            @media only screen and (max-width: 480px) {{
+                .email-container {{
                     padding: 25px;
-                }
+                }}
                 
-                .support-options {
+                .support-options {{
                     flex-direction: column;
                     gap: 10px;
-                }
-            }
+                }}
+            }}
         </style>
     </head>
     <body>
@@ -577,7 +590,7 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Data da Compra</span>
-                            <span class="detail-value">{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}</span>
+                            <span class="detail-value">{purchase_date}</span>
                         </div>
                     </div>
                 </div>
@@ -622,13 +635,37 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
                 <div class="footer">
                     <p>Este email foi enviado para {recipient_email}</p>
                     <p>Este é um email automático. Por favor, não responda.</p>
-                    <p>© {datetime.datetime.now().year} AstraKey. Todos os direitos reservados.</p>
+                    <p>© {current_year} AstraKey. Todos os direitos reservados.</p>
                 </div>
             </div>
         </div>
     </body>
     </html>
     """
+    
+    # Prepara a mensagem
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_FROM
+    msg['To'] = recipient_email
+    msg['Subject'] = subject
+    
+    # Anexa o corpo do email em HTML
+    msg.attach(MIMEText(html_content, 'html'))
+    
+    try:
+        # Configura a conexão SMTP
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+        server.starttls()  # Ativa a criptografia TLS
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        
+        # Envia o email
+        server.send_message(msg)
+        server.quit()
+        print(f"Email enviado com sucesso para {recipient_email}")
+        return True
+    except Exception as e:
+        print(f"Erro ao enviar email: {str(e)}")
+        return False
     
     # Prepara a mensagem
     msg = MIMEMultipart()
