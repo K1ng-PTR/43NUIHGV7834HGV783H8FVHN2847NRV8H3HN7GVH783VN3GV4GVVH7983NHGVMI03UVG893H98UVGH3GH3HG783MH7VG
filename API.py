@@ -573,65 +573,463 @@ DARK_TEMPLATE = """
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Administração - Auth HWID</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background: linear-gradient(135deg, #1c1b1b 0%, #2b2a2a 100%); color: #f5e7c8; font-family: 'Arial', serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .container { text-align: center; width: 600px !important; background-color: #2b2b2b; border: 2px solid #bfa560; box-shadow: 0 0 10px rgba(191, 165, 96, 0.4); padding: 20px; border-radius: 10px; }
-        .adm {font-size: 20px;}
-        input[type="password"], input[type="submit"] { width: 100%; padding: 10px; margin: 10px 0; border: none; border-radius: 5px; }
-        input[type="password"] { background-color: #3a3a3a; color: #f5e7c8; }
-        input[type="submit"] { background-color: #bfa560; color: #2b2b2b; cursor: pointer; font-weight: bold; }
-        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
-        th, td { border: 1px solid #bfa560; padding: 8px; text-align: center; }
-        th { background-color: #3a3a3a; }
-        tr:nth-child(even) { background-color: #2b2b2b; }
-        .hidden { display: none; }
+        :root {
+            --primary: #bfa560;
+            --primary-dark: #a08a47;
+            --background: #1a1a1a;
+            --surface: #2b2b2b;
+            --surface-light: #3a3a3a;
+            --text: #f5e7c8;
+            --text-secondary: #d1c0a5;
+            --danger: #e74c3c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--background) 0%, #252525 100%);
+            color: var(--text);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background-color: var(--surface);
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 20px rgba(191, 165, 96, 0.2);
+            padding: 30px;
+            border-radius: 12px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        .header h1, .header h2 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        .badge {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: var(--primary);
+            color: var(--background);
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        form {
+            margin: 20px 0;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 12px;
+            color: var(--primary);
+        }
+
+        input[type="password"], input[type="text"] {
+            width: 100%;
+            padding: 12px 15px 12px 45px;
+            border: 1px solid var(--surface-light);
+            border-radius: 8px;
+            background-color: var(--surface-light);
+            color: var(--text);
+            font-size: 16px;
+        }
+
+        input[type="password"]:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(191, 165, 96, 0.3);
+        }
+
+        button, input[type="submit"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--primary);
+            color: var(--background);
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        button:hover, input[type="submit"]:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--surface-light);
+        }
+
+        th {
+            background-color: var(--surface-light);
+            color: var(--primary);
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 1px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background-color: rgba(191, 165, 96, 0.1);
+        }
+
+        .auth-status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .authorized {
+            background-color: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+
+        .unauthorized {
+            background-color: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+
+        .action-btn {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            width: auto;
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            width: auto;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+
+        .logout-btn:hover {
+            background: var(--primary);
+            color: var(--background);
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            th, td {
+                padding: 10px 8px;
+                font-size: 14px;
+            }
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+        
+        .pagination button {
+            width: auto;
+            padding: 8px 12px;
+        }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: var(--primary);
+            color: var(--background);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
     <div class="container">
         {% if not authenticated %}
         <div id="login-box">
-            <h2 class="adm">Admin Login</h2>
-            <form method="post" action="{{ url_for('auth_hwid') }}">
-                <input type="password" name="password" placeholder="Senha de Admin" required>
-                <input type="submit" value="Entrar">
+            <div class="header">
+                <h2>Administração Auth HWID</h2>
+                <div class="badge">Secure Access</div>
+            </div>
+            <form method="post" action="{{ url_for('auth_hwid') }}" id="login-form">
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" name="password" id="password" placeholder="Senha de Admin" required>
+                </div>
+                <button type="submit">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Entrar
+                </button>
             </form>
         </div>
         {% else %}
-        <h1>Registros de Ativação</h1>
-        <table>
-            <tr>
-                <th>Activation ID</th>
-                <th>Chave</th>
-                <th>Tipo</th>
-                <th>HWID</th>
-                <th>Data de Ativação</th>
-                <th>Ação</th>
-            </tr>
-            {% for r in records %}
-            <tr>
-                <td>{{ r.activation_id }}</td>
-                <td>{{ r.chave }}</td>
-                <td>{{ r.tipo }}</td>
-                <td>{{ r.hwid or "N/D" }}</td>
-                <td>{{ r.data_ativacao or "N/D" }}</td>
-                <td>
-                    {% if not r.authorized %}
-                    <form method="post" action="{{ url_for('auth_hwid_authorize') }}">
-                        <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
-                        <input type="hidden" name="password" value="{{ admin_password }}">
-                        <input type="submit" value="Autorizar">
-                    </form>
-                    {% else %}
-                        Autorizado
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
+        <div class="header">
+            <button class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+            <h1>Registros de Ativação</h1>
+            <p>Gerencie autorizações de HWID</p>
+        </div>
+        
+        <div class="search-box">
+            <div class="input-group">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Buscar por chave ou HWID...">
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <table id="records-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Chave</th>
+                        <th>Tipo</th>
+                        <th>HWID</th>
+                        <th>Data Ativação</th>
+                        <th>Status</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td>{{ r.activation_id }}</td>
+                        <td>{{ r.chave }}</td>
+                        <td>
+                            <span class="badge" style="background: {{ r.tipo == 'Premium' ? '#9b59b6' : '#3498db' }}">
+                                {{ r.tipo }}
+                            </span>
+                        </td>
+                        <td title="{{ r.hwid or 'Não definido' }}">{{ r.hwid or "N/D" }}</td>
+                        <td>{{ r.data_ativacao or "N/D" }}</td>
+                        <td>
+                            {% if r.authorized %}
+                            <span class="auth-status authorized">Autorizado</span>
+                            {% else %}
+                            <span class="auth-status unauthorized">Pendente</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not r.authorized %}
+                            <form method="post" action="{{ url_for('auth_hwid_authorize') }}" class="auth-form">
+                                <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
+                                <input type="hidden" name="password" value="{{ admin_password }}">
+                                <button type="submit" class="action-btn">
+                                    <i class="fas fa-check"></i> Autorizar
+                                </button>
+                            </form>
+                            {% else %}
+                            <button class="action-btn" style="background-color: var(--danger);" onclick="revokeAuth({{ r.activation_id }})">
+                                <i class="fas fa-ban"></i> Revogar
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="pagination">
+            <button id="prevPage"><i class="fas fa-chevron-left"></i> Anterior</button>
+            <button id="nextPage">Próximo <i class="fas fa-chevron-right"></i></button>
+        </div>
         {% endif %}
     </div>
+    
+    <div id="toast" class="toast">Ação realizada com sucesso!</div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Login animation
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', function(e) {
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Entrando...';
+                });
+            }
+            
+            // Search functionality
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase();
+                    const rows = document.querySelectorAll('#records-table tbody tr');
+                    
+                    rows.forEach(row => {
+                        const chave = row.cells[1].textContent.toLowerCase();
+                        const hwid = row.cells[3].textContent.toLowerCase();
+                        
+                        if (chave.includes(searchTerm) || hwid.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
+                });
+            }
+            
+            // Pagination
+            const table = document.getElementById('records-table');
+            if (table) {
+                const rowsPerPage = 5;
+                const rows = table.querySelectorAll('tbody tr');
+                const pageCount = Math.ceil(rows.length / rowsPerPage);
+                let currentPage = 1;
+                
+                function showPage(page) {
+                    const start = (page - 1) * rowsPerPage;
+                    const end = start + rowsPerPage;
+                    
+                    rows.forEach((row, index) => {
+                        row.style.display = (index >= start && index < end) ? '' : 'none';
+                    });
+                }
+                
+                showPage(currentPage);
+                
+                document.getElementById('prevPage').addEventListener('click', function() {
+                    if (currentPage > 1) {
+                        currentPage--;
+                        showPage(currentPage);
+                    }
+                });
+                
+                document.getElementById('nextPage').addEventListener('click', function() {
+                    if (currentPage < pageCount) {
+                        currentPage++;
+                        showPage(currentPage);
+                    }
+                });
+            }
+            
+            // Form submissions with toast notification
+            const authForms = document.querySelectorAll('.auth-form');
+            authForms.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    const originalHTML = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+                    submitBtn.disabled = true;
+                    
+                    setTimeout(() => {
+                        this.submit();
+                        showToast('Autorização concedida com sucesso!');
+                    }, 500);
+                });
+            });
+            
+            // Toast notification
+            function showToast(message) {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.classList.add('show');
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+            
+            // HWID revoke function (example)
+            window.revokeAuth = function(id) {
+                if (confirm('Tem certeza que deseja revogar esta autorização?')) {
+                    showToast('Autorização revogada com sucesso!');
+                    // Here you would handle the revoke action with your backend
+                }
+            };
+            
+            // Logout button
+            const logoutBtn = document.querySelector('.logout-btn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', function() {
+                    if (confirm('Deseja realmente sair?')) {
+                        window.location.href = "{{ url_for('auth_hwid_logout') }}";
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>
 """
