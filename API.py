@@ -275,7 +275,7 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
         return False
     
     # Prepara o assunto do email
-    subject = "Sua Chave de Ativação - Compra Concluída"
+    subject = "Chave de Ativação - Compra Concluída ✅"
     
     # Prepara o corpo do email em HTML
     html_content = f"""
@@ -371,8 +371,8 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
         <div class="container">
             <div class="header">
                 <!-- Se você tiver um logo, adicione aqui -->
-                <!-- <img src="https://seusite.com/logo.png" alt="Logo" class="logo"> -->
-                <h1>Sua Compra Foi Concluída com Sucesso!</h1>
+                <!-- <img src="https://cdn.discordapp.com/attachments/1339014898931470389/1344922213735727165/Astra_Key.png?ex=67c54eeb&is=67c3fd6b&hm=a223751e09bf8a7e56d6d903526d6cbace07f2ab83af354f3ee286239e1c4c31&" alt="Logo" class="logo"> -->
+                <h1>A Sua Compra Foi Concluída com Sucesso!</h1>
             </div>
             
             <p>Olá,</p>
@@ -689,7 +689,7 @@ def sucesso():
             
             footer {{
                 margin-top: 2rem;
-                font-size: 0.9rem;
+                font-size: 0.85rem;
                 opacity: 0.7;
             }}
             
