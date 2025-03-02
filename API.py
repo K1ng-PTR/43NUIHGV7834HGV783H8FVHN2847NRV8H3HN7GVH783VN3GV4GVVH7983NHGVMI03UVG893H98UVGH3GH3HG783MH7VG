@@ -1024,7 +1024,7 @@ DARK_TEMPLATE = """
             if (logoutBtn) {
                 logoutBtn.addEventListener('click', function() {
                     if (confirm('Deseja realmente sair?')) {
-                        window.location.href = "{{ url_for('auth_hwid_logout') }}";
+                        window.location.href = "{{ url_for('auth_hwid') }}";  // Changed to use existing route
                     }
                 });
             }
@@ -1053,6 +1053,11 @@ def auth_hwid():
     result = supabase.table("activations").select("*").execute()
     records = result.data if result.data else []
     return render_template_string(DARK_TEMPLATE, authenticated=True, records=records, admin_password=ADMIN_PASSWORD)
+
+# Add this route for logout functionality
+@app.route("/auth-hwid-logout")
+def auth_hwid_logout():
+    return redirect(url_for('auth_hwid'))
 
 @app.route("/auth-hwid/authorize", methods=["POST"])
 def auth_hwid_authorize():
