@@ -642,7 +642,6 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
     </body>
     </html>
     """
-    
     # Prepara a mensagem
     msg = MIMEMultipart()
     msg['From'] = EMAIL_FROM
