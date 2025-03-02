@@ -875,7 +875,7 @@ DARK_TEMPLATE = """
                         <td>{{ r.activation_id }}</td>
                         <td>{{ r.chave }}</td>
                         <td>
-                            <span class="badge" style="background: {{ r.tipo == 'Premium' ? '#9b59b6' : '#3498db' }}">
+                            <span class="badge" style="background: {% if r.tipo == 'Premium' %}#9b59b6{% else %}#3498db{% endif %}">
                                 {{ r.tipo }}
                             </span>
                         </td>
