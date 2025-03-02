@@ -227,13 +227,6 @@ import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-# Variáveis para configuração de email (precisam ser definidas antes de usar a função)
-EMAIL_HOST = ""  # Exemplo: "smtp.gmail.com"
-EMAIL_PORT = 587  # Porta padrão para TLS
-EMAIL_USER = ""  # Seu endereço de email
-EMAIL_PASSWORD = ""  # Sua senha
-EMAIL_FROM = ""  # Nome e email do remetente
-
 def send_key_email(recipient_email, key, key_type, transaction_id):
     """
     Envia um email com a chave de ativação para o cliente.
@@ -247,6 +240,7 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
     Returns:
         bool: True se o email foi enviado com sucesso, False caso contrário
     """
+    # Verificamos as variáveis de ambiente já definidas no início do arquivo
     if not all([EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD]):
         print("Erro: Configurações de email incompletas.")
         return False
@@ -610,6 +604,29 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
     </body>
     </html>
     """
+    # Prepara a mensagem
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_FROM
+    msg['To'] = recipient_email
+    msg['Subject'] = subject
+    
+    # Anexa o corpo do email em HTML
+    msg.attach(MIMEText(html_content, 'html'))
+    
+    try:
+        # Configura a conexão SMTP
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+        server.starttls()  # Ativa a criptografia TLS
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        
+        # Envia o email
+        server.send_message(msg)
+        server.quit()
+        print(f"Email enviado com sucesso para {recipient_email}")
+        return True
+    except Exception as e:
+        print(f"Erro ao enviar email: {str(e)}")
+        return False
 
 # Modifique a função stripe_webhook para incluir o envio de email
 @app.route("/stripe-webhook", methods=["POST"])
