@@ -1101,38 +1101,335 @@ def auth_hwid_authorize():
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>Nova Chave Gerada</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sistema de Autorização</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <style>
-            body {{
-                background-color: #121212;
-                color: #fff;
-                font-family: Arial, sans-serif;
-                text-align: center;
-                padding-top: 50px;
-            }}
-            .container {{
-                width: 80%;
-                margin: auto;
-            }}
-            .key-box {{
-                background-color: #1e1e1e;
+            :root {
+                --primary: #4f46e5;
+                --primary-hover: #4338ca;
+                --background: #0f172a;
+                --card-bg: #1e293b;
+                --text: #f8fafc;
+                --text-secondary: #94a3b8;
+                --success: #10b981;
+                --error: #ef4444;
+                --warning: #f59e0b;
+            }
+    
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                transition: all 0.3s ease;
+            }
+    
+            body {
+                background: var(--background);
+                color: var(--text);
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
                 padding: 20px;
+            }
+    
+            .container {
+                width: 100%;
+                max-width: 600px;
+                animation: fadeIn 0.5s ease-in-out;
+            }
+    
+            .card {
+                background: var(--card-bg);
+                border-radius: 16px;
+                padding: 30px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+                margin-bottom: 20px;
+                overflow: hidden;
+                position: relative;
+            }
+    
+            .card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 5px;
+                background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+            }
+    
+            h1 {
+                font-size: 2rem;
+                margin-bottom: 1.5rem;
+                color: var(--text);
+                text-align: center;
+                font-weight: 700;
+            }
+    
+            h2 {
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+                color: var(--text);
+                font-weight: 600;
+            }
+    
+            p {
+                color: var(--text-secondary);
+                margin-bottom: 1.5rem;
+                font-size: 1rem;
+            }
+    
+            .key-box {
+                background: rgba(15, 23, 42, 0.7);
                 border-radius: 8px;
-                display: inline-block;
+                padding: 20px;
+                margin: 20px 0;
+                border: 1px solid rgba(79, 70, 229, 0.3);
+                position: relative;
+                overflow: hidden;
+            }
+    
+            .key-value {
+                font-family: 'Courier New', monospace;
+                font-size: 1.2rem;
+                letter-spacing: 1px;
+                word-break: break-all;
+                color: var(--text);
+                text-align: center;
+                margin: 10px 0;
+            }
+    
+            .copy-btn {
+                background: var(--primary);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 1rem;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                margin: 0 auto;
+                transition: transform 0.2s ease, background 0.3s ease;
+            }
+    
+            .copy-btn:hover {
+                background: var(--primary-hover);
+                transform: translateY(-2px);
+            }
+    
+            .copy-btn:active {
+                transform: translateY(0);
+            }
+    
+            .status {
                 margin-top: 20px;
-                font-size: 1.5em;
-                letter-spacing: 2px;
-            }}
+                padding: 15px;
+                border-radius: 8px;
+                font-weight: 500;
+                text-align: center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+            }
+    
+            .status.success {
+                background: rgba(16, 185, 129, 0.2);
+                color: var(--success);
+            }
+    
+            .status.error {
+                background: rgba(239, 68, 68, 0.2);
+                color: var(--error);
+            }
+    
+            .icon-pulse {
+                animation: pulse 2s infinite;
+            }
+    
+            @keyframes pulse {
+                0% {
+                    transform: scale(1);
+                }
+                50% {
+                    transform: scale(1.1);
+                }
+                100% {
+                    transform: scale(1);
+                }
+            }
+    
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(20px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+    
+            @keyframes slideIn {
+                from {
+                    transform: translateX(-100%);
+                }
+                to {
+                    transform: translateX(0);
+                }
+            }
+    
+            .steps {
+                margin: 30px 0;
+            }
+    
+            .step {
+                display: flex;
+                margin-bottom: 15px;
+                opacity: 0;
+                animation: fadeIn 0.5s ease forwards;
+            }
+    
+            .step:nth-child(1) { animation-delay: 0.2s; }
+            .step:nth-child(2) { animation-delay: 0.4s; }
+            .step:nth-child(3) { animation-delay: 0.6s; }
+    
+            .step-number {
+                background: var(--primary);
+                color: white;
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 15px;
+                flex-shrink: 0;
+            }
+    
+            .step-content {
+                flex: 1;
+            }
+    
+            .loading {
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                border: 3px solid rgba(255,255,255,0.3);
+                border-radius: 50%;
+                border-top-color: white;
+                animation: spin 1s ease-in-out infinite;
+                margin-right: 10px;
+            }
+    
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+    
+            .hidden {
+                display: none;
+            }
+    
+            footer {
+                text-align: center;
+                margin-top: 30px;
+                color: var(--text-secondary);
+                font-size: 0.875rem;
+            }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>Autorização Atualizada!</h1>
-            <p>Sua licença atual foi revogada.</p>
-            <p>A nova chave gerada é:</p>
-            <div class="key-box">{new_key}</div>
-            <p>Por favor, copie essa chave e reinicie a aplicação para reativar.</p>
+            <div class="card">
+                <h1><i class="fas fa-shield-alt"></i> Autorização Atualizada</h1>
+                
+                <div class="status success">
+                    <i class="fas fa-check-circle icon-pulse"></i>
+                    <span>Processo concluído com sucesso</span>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <h2>Nova chave de ativação</h2>
+                    <p>Sua licença anterior foi revogada. Utilize a nova chave abaixo para reativar sua aplicação.</p>
+                    
+                    <div class="key-box">
+                        <div class="key-value" id="key-value">{new_key}</div>
+                        <button class="copy-btn" id="copy-btn">
+                            <i class="fas fa-copy"></i> Copiar Chave
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="steps">
+                    <h2>Próximos passos:</h2>
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <strong>Copie a chave</strong>
+                            <p>Use o botão acima para copiar sua nova chave de ativação</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <strong>Feche a aplicação</strong>
+                            <p>Certifique-se de fechar completamente o programa</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <strong>Reinicie e ative</strong>
+                            <p>Abra novamente a aplicação e use a nova chave para ativar</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <footer>
+                <p>© 2025 Sistema de Autorização • Todos os direitos reservados</p>
+            </footer>
         </div>
+    
+        <script>
+            // Função para copiar a chave
+            document.getElementById('copy-btn').addEventListener('click', function() {
+                const keyText = document.getElementById('key-value').innerText;
+                navigator.clipboard.writeText(keyText).then(function() {
+                    const btn = document.getElementById('copy-btn');
+                    const originalText = btn.innerHTML;
+                    
+                    btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+                    btn.style.background = 'var(--success)';
+                    
+                    setTimeout(function() {
+                        btn.innerHTML = originalText;
+                        btn.style.background = 'var(--primary)';
+                    }, 2000);
+                }).catch(function(err) {
+                    console.error('Erro ao copiar: ', err);
+                    alert('Não foi possível copiar automaticamente. Por favor, selecione e copie manualmente.');
+                });
+            });
+    
+            // Animação de entrada
+            document.addEventListener('DOMContentLoaded', function() {
+                const container = document.querySelector('.container');
+                container.style.opacity = '0';
+                
+                setTimeout(function() {
+                    container.style.opacity = '1';
+                    container.style.transform = 'translateY(0)';
+                }, 100);
+            });
+        </script>
     </body>
     </html>
     """
