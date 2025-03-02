@@ -278,7 +278,7 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
     subject = "Chave de Ativação - Compra Concluída ✅"
     
     # Prepara o corpo do email em HTML
-    html_content = f"""
+    html_content = """
     <!DOCTYPE html>
     <html lang="pt">
     <head>
