@@ -206,38 +206,6 @@ def validate():
         "message": "Chave validada com sucesso."
     }), 200
 
-    # Fluxo para primeira ativação (sem HWID definido)
-    now_dt = datetime.datetime.now().isoformat()
-    new_activation_id = generate_activation_id(hwid_request, chave)
-    update_data = {
-        "hwid": hwid_request,
-        "activation_id": new_activation_id,
-        "data_ativacao": now_dt
-    }
-    try:
-        update_res = supabase.table("activations").update(update_data).eq("chave", chave).execute()
-        if not update_res.data:
-            print("Erro: atualização retornou dados vazios.")
-            return jsonify({
-                "error": "Erro ao atualizar registro",
-                "details": "Dados não retornados"
-            }), 500
-    except Exception as e:
-        print("Exceção ao atualizar registro:", e)
-        return jsonify({
-            "error": "Erro ao atualizar registro",
-            "details": str(e)
-        }), 500
-        
-    registro.update(update_data)
-    return jsonify({
-        "valid": True,
-        "tipo": registro.get("tipo"),
-        "data_ativacao": now_dt,
-        "activation_id": new_activation_id,
-        "message": "Chave validada com sucesso."
-    }), 200
-
 @app.route('/buys', methods=['GET'])
 def get_buys():
     global pending_buys
@@ -642,53 +610,6 @@ def send_key_email(recipient_email, key, key_type, transaction_id):
     </body>
     </html>
     """
-    # Prepara a mensagem
-    msg = MIMEMultipart()
-    msg['From'] = EMAIL_FROM
-    msg['To'] = recipient_email
-    msg['Subject'] = subject
-    
-    # Anexa o corpo do email em HTML
-    msg.attach(MIMEText(html_content, 'html'))
-    
-    try:
-        # Configura a conexão SMTP
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-        server.starttls()  # Ativa a criptografia TLS
-        server.login(EMAIL_USER, EMAIL_PASSWORD)
-        
-        # Envia o email
-        server.send_message(msg)
-        server.quit()
-        print(f"Email enviado com sucesso para {recipient_email}")
-        return True
-    except Exception as e:
-        print(f"Erro ao enviar email: {str(e)}")
-        return False
-    
-    # Prepara a mensagem
-    msg = MIMEMultipart()
-    msg['From'] = EMAIL_FROM
-    msg['To'] = recipient_email
-    msg['Subject'] = subject
-    
-    # Anexa o corpo do email em HTML
-    msg.attach(MIMEText(html_content, 'html'))
-    
-    try:
-        # Configura a conexão SMTP
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-        server.starttls()  # Ativa a criptografia TLS
-        server.login(EMAIL_USER, EMAIL_PASSWORD)
-        
-        # Envia o email
-        server.send_message(msg)
-        server.quit()
-        print(f"Email enviado com sucesso para {recipient_email}")
-        return True
-    except Exception as e:
-        print(f"Erro ao enviar email: {str(e)}")
-        return False
 
 # Modifique a função stripe_webhook para incluir o envio de email
 @app.route("/stripe-webhook", methods=["POST"])
