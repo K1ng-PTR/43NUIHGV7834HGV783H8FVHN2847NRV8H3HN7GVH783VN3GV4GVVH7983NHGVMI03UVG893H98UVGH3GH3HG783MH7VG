@@ -1065,21 +1065,17 @@ def auth_hwid_authorize():
     admin_pass = request.form.get("password") or (request.json or {}).get("password")
     if admin_pass != ADMIN_PASSWORD:
         return "<h1>Acesso não autorizado</h1>", 401
-
     # Obter o activation_id do registro a ser revogado
     activation_id_old = request.form.get("activation_id") or (request.json or {}).get("activation_id")
     if not activation_id_old:
         return "<h1>Activation ID não informado</h1>", 400
-
     # Consulta o registro antigo no Supabase
     res = supabase.table("activations").select("*").eq("activation_id", activation_id_old).execute()
     if not res.data:
         return "<h1>Registro não encontrado</h1>", 404
-
     # Marcar o registro antigo como revogado
     revoke_update = {"revoked": True}
     supabase.table("activations").update(revoke_update).eq("activation_id", activation_id_old).execute()
-
     # Gerar nova chave do tipo LifeTime (o client calculará ID, HWID, etc)
     new_key = generate_key()
     new_activation_id = generate_activation_id("", new_key)  # sem HWID
@@ -1094,8 +1090,8 @@ def auth_hwid_authorize():
     insert_res = supabase.table("activations").insert(new_record).execute()
     if not insert_res.data:
         return f"<h1>Erro ao inserir novo registro: {insert_res}</h1>", 500
-
-    # Retornar a nova chave em HTML
+    
+    # Retornar a nova chave em HTML - IMPORTANTE: Observe como o CSS está dentro de uma string Python
     response_html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -1105,7 +1101,7 @@ def auth_hwid_authorize():
         <title>Sistema de Autorização</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <style>
-            :root {
+            :root {{
                 --primary: #4f46e5;
                 --primary-hover: #4338ca;
                 --background: #0f172a;
@@ -1115,16 +1111,16 @@ def auth_hwid_authorize():
                 --success: #10b981;
                 --error: #ef4444;
                 --warning: #f59e0b;
-            }
-    
-            * {
+            }}
+
+            * {{
                 margin: 0;
                 padding: 0;
                 box-sizing: border-box;
                 transition: all 0.3s ease;
-            }
-    
-            body {
+            }}
+
+            body {{
                 background: var(--background);
                 color: var(--text);
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1134,15 +1130,15 @@ def auth_hwid_authorize():
                 align-items: center;
                 min-height: 100vh;
                 padding: 20px;
-            }
-    
-            .container {
+            }}
+
+            .container {{
                 width: 100%;
                 max-width: 600px;
                 animation: fadeIn 0.5s ease-in-out;
-            }
-    
-            .card {
+            }}
+
+            .card {{
                 background: var(--card-bg);
                 border-radius: 16px;
                 padding: 30px;
@@ -1150,9 +1146,9 @@ def auth_hwid_authorize():
                 margin-bottom: 20px;
                 overflow: hidden;
                 position: relative;
-            }
-    
-            .card::before {
+            }}
+
+            .card::before {{
                 content: '';
                 position: absolute;
                 top: 0;
@@ -1160,30 +1156,30 @@ def auth_hwid_authorize():
                 width: 100%;
                 height: 5px;
                 background: linear-gradient(90deg, var(--primary), var(--primary-hover));
-            }
-    
-            h1 {
+            }}
+
+            h1 {{
                 font-size: 2rem;
                 margin-bottom: 1.5rem;
                 color: var(--text);
                 text-align: center;
                 font-weight: 700;
-            }
-    
-            h2 {
+            }}
+
+            h2 {{
                 font-size: 1.5rem;
                 margin-bottom: 1rem;
                 color: var(--text);
                 font-weight: 600;
-            }
-    
-            p {
+            }}
+
+            p {{
                 color: var(--text-secondary);
                 margin-bottom: 1.5rem;
                 font-size: 1rem;
-            }
-    
-            .key-box {
+            }}
+
+            .key-box {{
                 background: rgba(15, 23, 42, 0.7);
                 border-radius: 8px;
                 padding: 20px;
@@ -1191,9 +1187,9 @@ def auth_hwid_authorize():
                 border: 1px solid rgba(79, 70, 229, 0.3);
                 position: relative;
                 overflow: hidden;
-            }
-    
-            .key-value {
+            }}
+
+            .key-value {{
                 font-family: 'Courier New', monospace;
                 font-size: 1.2rem;
                 letter-spacing: 1px;
@@ -1201,9 +1197,9 @@ def auth_hwid_authorize():
                 color: var(--text);
                 text-align: center;
                 margin: 10px 0;
-            }
-    
-            .copy-btn {
+            }}
+
+            .copy-btn {{
                 background: var(--primary);
                 color: white;
                 border: none;
@@ -1217,18 +1213,18 @@ def auth_hwid_authorize():
                 gap: 8px;
                 margin: 0 auto;
                 transition: transform 0.2s ease, background 0.3s ease;
-            }
-    
-            .copy-btn:hover {
+            }}
+
+            .copy-btn:hover {{
                 background: var(--primary-hover);
                 transform: translateY(-2px);
-            }
-    
-            .copy-btn:active {
+            }}
+
+            .copy-btn:active {{
                 transform: translateY(0);
-            }
-    
-            .status {
+            }}
+
+            .status {{
                 margin-top: 20px;
                 padding: 15px;
                 border-radius: 8px;
@@ -1238,70 +1234,70 @@ def auth_hwid_authorize():
                 align-items: center;
                 justify-content: center;
                 gap: 10px;
-            }
-    
-            .status.success {
+            }}
+
+            .status.success {{
                 background: rgba(16, 185, 129, 0.2);
                 color: var(--success);
-            }
-    
-            .status.error {
+            }}
+
+            .status.error {{
                 background: rgba(239, 68, 68, 0.2);
                 color: var(--error);
-            }
-    
-            .icon-pulse {
+            }}
+
+            .icon-pulse {{
                 animation: pulse 2s infinite;
-            }
-    
-            @keyframes pulse {
-                0% {
+            }}
+
+            @keyframes pulse {{
+                0% {{
                     transform: scale(1);
-                }
-                50% {
+                }}
+                50% {{
                     transform: scale(1.1);
-                }
-                100% {
+                }}
+                100% {{
                     transform: scale(1);
-                }
-            }
-    
-            @keyframes fadeIn {
-                from {
+                }}
+            }}
+
+            @keyframes fadeIn {{
+                from {{
                     opacity: 0;
                     transform: translateY(20px);
-                }
-                to {
+                }}
+                to {{
                     opacity: 1;
                     transform: translateY(0);
-                }
-            }
-    
-            @keyframes slideIn {
-                from {
+                }}
+            }}
+
+            @keyframes slideIn {{
+                from {{
                     transform: translateX(-100%);
-                }
-                to {
+                }}
+                to {{
                     transform: translateX(0);
-                }
-            }
-    
-            .steps {
+                }}
+            }}
+
+            .steps {{
                 margin: 30px 0;
-            }
-    
-            .step {
+            }}
+
+            .step {{
                 display: flex;
                 margin-bottom: 15px;
                 opacity: 0;
                 animation: fadeIn 0.5s ease forwards;
-            }
-    
-            .step:nth-child(1) { animation-delay: 0.2s; }
-            .step:nth-child(2) { animation-delay: 0.4s; }
-            .step:nth-child(3) { animation-delay: 0.6s; }
-    
-            .step-number {
+            }}
+
+            .step:nth-child(1) {{ animation-delay: 0.2s; }}
+            .step:nth-child(2) {{ animation-delay: 0.4s; }}
+            .step:nth-child(3) {{ animation-delay: 0.6s; }}
+
+            .step-number {{
                 background: var(--primary);
                 color: white;
                 width: 30px;
@@ -1312,13 +1308,13 @@ def auth_hwid_authorize():
                 justify-content: center;
                 margin-right: 15px;
                 flex-shrink: 0;
-            }
-    
-            .step-content {
+            }}
+
+            .step-content {{
                 flex: 1;
-            }
-    
-            .loading {
+            }}
+
+            .loading {{
                 display: inline-block;
                 width: 20px;
                 height: 20px;
@@ -1327,22 +1323,22 @@ def auth_hwid_authorize():
                 border-top-color: white;
                 animation: spin 1s ease-in-out infinite;
                 margin-right: 10px;
-            }
-    
-            @keyframes spin {
-                to { transform: rotate(360deg); }
-            }
-    
-            .hidden {
+            }}
+
+            @keyframes spin {{
+                to {{ transform: rotate(360deg); }}
+            }}
+
+            .hidden {{
                 display: none;
-            }
-    
-            footer {
+            }}
+
+            footer {{
                 text-align: center;
                 margin-top: 30px;
                 color: var(--text-secondary);
                 font-size: 0.875rem;
-            }
+            }}
         </style>
     </head>
     <body>
@@ -1366,7 +1362,7 @@ def auth_hwid_authorize():
                         </button>
                     </div>
                 </div>
-    
+
                 <div class="steps">
                     <h2>Próximos passos:</h2>
                     <div class="step">
@@ -1397,38 +1393,38 @@ def auth_hwid_authorize():
                 <p>© 2025 Sistema de Autorização • Todos os direitos reservados</p>
             </footer>
         </div>
-    
+
         <script>
             // Função para copiar a chave
-            document.getElementById('copy-btn').addEventListener('click', function() {
+            document.getElementById('copy-btn').addEventListener('click', function() {{
                 const keyText = document.getElementById('key-value').innerText;
-                navigator.clipboard.writeText(keyText).then(function() {
+                navigator.clipboard.writeText(keyText).then(function() {{
                     const btn = document.getElementById('copy-btn');
                     const originalText = btn.innerHTML;
                     
                     btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
                     btn.style.background = 'var(--success)';
                     
-                    setTimeout(function() {
+                    setTimeout(function() {{
                         btn.innerHTML = originalText;
                         btn.style.background = 'var(--primary)';
-                    }, 2000);
-                }).catch(function(err) {
+                    }}, 2000);
+                }}).catch(function(err) {{
                     console.error('Erro ao copiar: ', err);
                     alert('Não foi possível copiar automaticamente. Por favor, selecione e copie manualmente.');
-                });
-            });
-    
+                }});
+            }});
+
             // Animação de entrada
-            document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('DOMContentLoaded', function() {{
                 const container = document.querySelector('.container');
                 container.style.opacity = '0';
                 
-                setTimeout(function() {
+                setTimeout(function() {{
                     container.style.opacity = '1';
                     container.style.transform = 'translateY(0)';
-                }, 100);
-            });
+                }}, 100);
+            }});
         </script>
     </body>
     </html>
