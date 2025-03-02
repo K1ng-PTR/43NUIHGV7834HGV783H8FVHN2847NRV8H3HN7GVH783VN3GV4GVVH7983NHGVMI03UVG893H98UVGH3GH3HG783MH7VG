@@ -4,6 +4,9 @@ import random
 import string
 import datetime
 import hashlib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import sys
 from datetime import timedelta
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
@@ -29,6 +32,13 @@ if STRIPE_SECRET_KEY:
 
 # Senha administrativa para acessar o subsite /auth-hwid
 ADMIN_PASSWORD = "1U_eZAvFrH7IwI4yhVoiBr!4QMqh!ePKab.X4R1Am/xs0/kvxJ/uvb3.9HUHB1lhJ!XqTIGaH_pzV.KoJfyx/jwD8jc3Zh1n5ER.UKPqsYxfKTx5PJUGC4BTaq1RM3//8QfU5bJSfgzlDfXlF13Ql6BAgJ3KOLbsHi!.mt_U2oXao.Co_AwidbN9L.fj/Df_KUSHvlHfJD621OrQxsqP60-7HhdwqU6bQf/a4KaHcJD4Lk-mcAyOVkIsrJEgpswVMl-rY8cq5ZgONm4xKW2k!UPmPa1wqsxL!Mk-.ft/c-frL4R7WWYBiwvJiZ_WWHkQ_flgrWKAaCaovlNRKbl4unX.R1v_6av/vBJ-b-q/wMNBbTFgwvgHpso8xsDfwy7dCSPOAHJ7fmsDTBYKeY1Khj6B_Y.3_jjNJl5-GfIOS4MA/fsm7FlB0pdS3d/VTcU0iJad/DR9aGBux3DAaM/YNm/EtitvVgt9Yd!fu8-wya7HBrA7-pCi"
+
+# Adicione estas variáveis de ambiente no bloco de variáveis de ambiente
+EMAIL_HOST = os.environ.get("EMAIL_HOST")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
+EMAIL_USER = os.environ.get("EMAIL_USER")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", EMAIL_USER)
 
 # Supabase
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -243,6 +253,204 @@ def ping():
 def index():
     return jsonify({"message": "API de chaves rodando."}), 200
 
+# Se alguma das variáveis de email não estiver definida, mostre um aviso
+if not all([EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD]):
+    print("AVISO: Configurações de email incompletas. O envio de emails pode não funcionar.")
+
+def send_key_email(recipient_email, key, key_type, transaction_id):
+    """
+    Envia um email com a chave de ativação para o cliente.
+    
+    Args:
+        recipient_email (str): Email do destinatário
+        key (str): Chave de ativação
+        key_type (str): Tipo da chave (Uso Único ou LifeTime)
+        transaction_id (str): ID da transação
+    
+    Returns:
+        bool: True se o email foi enviado com sucesso, False caso contrário
+    """
+    if not all([EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD]):
+        print("Erro: Configurações de email incompletas.")
+        return False
+    
+    # Prepara o assunto do email
+    subject = "Sua Chave de Ativação - Compra Concluída"
+    
+    # Prepara o corpo do email em HTML
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="pt">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sua Chave de Ativação</title>
+        <style>
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            .container {{
+                background-color: #f9f9f9;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 25px;
+                margin-top: 20px;
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 30px;
+            }}
+            .logo {{
+                max-width: 150px;
+                height: auto;
+            }}
+            h1 {{
+                color: #bfa560;
+                margin-top: 0;
+                margin-bottom: 20px;
+            }}
+            .key-container {{
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 15px;
+                margin: 20px 0;
+                text-align: center;
+            }}
+            .key {{
+                font-family: monospace;
+                font-size: 18px;
+                letter-spacing: 1px;
+                color: #1c1b1b;
+                font-weight: bold;
+            }}
+            .info {{
+                margin: 20px 0;
+            }}
+            .info p {{
+                margin: 8px 0;
+            }}
+            .info-title {{
+                font-weight: bold;
+                color: #bfa560;
+            }}
+            .steps {{
+                margin: 25px 0;
+            }}
+            .step {{
+                margin-bottom: 15px;
+            }}
+            .step-number {{
+                display: inline-block;
+                width: 25px;
+                height: 25px;
+                background-color: #bfa560;
+                color: white;
+                border-radius: 50%;
+                text-align: center;
+                line-height: 25px;
+                margin-right: 10px;
+                font-weight: bold;
+            }}
+            .footer {{
+                margin-top: 30px;
+                font-size: 12px;
+                color: #777;
+                text-align: center;
+                border-top: 1px solid #e0e0e0;
+                padding-top: 20px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <!-- Se você tiver um logo, adicione aqui -->
+                <!-- <img src="https://seusite.com/logo.png" alt="Logo" class="logo"> -->
+                <h1>Sua Compra Foi Concluída com Sucesso!</h1>
+            </div>
+            
+            <p>Olá,</p>
+            
+            <p>Agradecemos pela sua compra. Abaixo está sua chave de ativação:</p>
+            
+            <div class="key-container">
+                <div class="key">{key}</div>
+            </div>
+            
+            <div class="info">
+                <p><span class="info-title">Tipo de licença:</span> {key_type}</p>
+                <p><span class="info-title">ID da transação:</span> {transaction_id}</p>
+                <p><span class="info-title">Data da compra:</span> {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+            </div>
+            
+            <div class="steps">
+                <h3>Como usar sua chave de ativação:</h3>
+                
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <span>Abra o aplicativo que você adquiriu</span>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <span>Navegue até a tela de ativação do produto</span>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <span>Insira a chave de ativação conforme mostrada acima</span>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <span>Clique em "Ativar" para completar o processo</span>
+                </div>
+            </div>
+            
+            <p>Se você encontrar algum problema durante a ativação ou tiver dúvidas sobre seu produto, não hesite em entrar em contato com nossa equipe de suporte.</p>
+            
+            <p>Obrigado por escolher nossos produtos!</p>
+            
+            <div class="footer">
+                <p>Este é um email automático. Por favor, não responda a este email.</p>
+                <p>© {datetime.datetime.now().year} Sua Empresa. Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Prepara a mensagem
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_FROM
+    msg['To'] = recipient_email
+    msg['Subject'] = subject
+    
+    # Anexa o corpo do email em HTML
+    msg.attach(MIMEText(html_content, 'html'))
+    
+    try:
+        # Configura a conexão SMTP
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+        server.starttls()  # Ativa a criptografia TLS
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        
+        # Envia o email
+        server.send_message(msg)
+        server.quit()
+        print(f"Email enviado com sucesso para {recipient_email}")
+        return True
+    except Exception as e:
+        print(f"Erro ao enviar email: {str(e)}")
+        return False
+
+# Modifique a função stripe_webhook para incluir o envio de email
 @app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.get_data(as_text=True)
@@ -279,10 +487,16 @@ def stripe_webhook():
             return jsonify({"error": "Erro ao inserir registro via Stripe", "details": "Dados não retornados"}), 500
 
         session_id = session.get("id")
+        customer_email = session.get("customer_details", {}).get("email", "")
         # Armazena os dados da sessão para a página de sucesso
-        session_keys[session_id] = {"chave": chave, "id_compra": session.get("id", "N/D")}
+        session_keys[session_id] = {
+            "chave": chave, 
+            "id_compra": session.get("id", "N/D"),
+            "email": customer_email,
+            "email_sent": False  # Inicialmente marcado como não enviado
+        }
         compra = {
-            "comprador": session.get("customer_details", {}).get("email", "N/D"),
+            "comprador": customer_email,
             "tipo_chave": tipo,
             "chave": chave,
             "id_compra": session.get("id", "N/D"),
@@ -290,7 +504,25 @@ def stripe_webhook():
             "checkout_url": checkout_link
         }
         pending_buys.append(compra)
-        return jsonify({"status": "success", "session_id": session_id, "chave": chave}), 200
+        
+        # Envia o email com a chave
+        email_sent = False
+        if customer_email:
+            email_sent = send_key_email(
+                recipient_email=customer_email,
+                key=chave,
+                key_type=tipo,
+                transaction_id=session.get("id", "N/D")
+            )
+            # Atualiza o status de envio do email
+            session_keys[session_id]["email_sent"] = email_sent
+        
+        return jsonify({
+            "status": "success", 
+            "session_id": session_id, 
+            "chave": chave,
+            "email_sent": email_sent
+        }), 200
     return jsonify({"status": "ignored"}), 200
 
 @app.route("/sucesso", methods=["GET"])
@@ -301,19 +533,18 @@ def sucesso():
     data = session_keys.get(session_id)
     if not data:
         return "<h1>Error:</h1><p>Key not found for the provided session.</p>", 404
-    chave = data["chave"]
+    
     id_compra = data["id_compra"]
-    res = supabase.table("activations").select("*").eq("chave", chave).execute()
-    if not res.data:
-        return "<h1>Error:</h1><p>Key details not found.</p>", 404
-    registro = res.data[0]
+    email = data["email"]
+    email_sent = data.get("email_sent", False)
+    
     html = f"""
     <!DOCTYPE html>
     <html lang="pt">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Sua Chave de Ativação</title>
+        <title>Confirmação de Compra</title>
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
         <style>
             :root {{
@@ -322,6 +553,7 @@ def sucesso():
                 --darker: #141414;
                 --light: #f5e7c8;
                 --success: #4caf50;
+                --warning: #ff9800;
                 --shadow: rgba(191, 165, 96, 0.25);
             }}
             
@@ -362,6 +594,14 @@ def sucesso():
                 color: var(--success);
                 font-size: 3rem;
                 margin-bottom: 1rem;
+                animation: pulse 1.5s infinite;
+            }}
+            
+            .warning-icon {{
+                color: var(--warning);
+                font-size: 3rem;
+                margin-bottom: 1rem;
+                animation: pulse 1.5s infinite;
             }}
             
             h1 {{
@@ -378,95 +618,73 @@ def sucesso():
                 line-height: 1.6;
             }}
             
-            .key-container {{
-                position: relative;
-                margin: 2rem 0;
-            }}
-            
-            .key-display {{
-                background-color: rgba(0, 0, 0, 0.3);
-                border: 1px solid var(--primary);
-                border-radius: 12px;
-                padding: 1rem;
-                font-family: monospace;
-                font-size: 1.4rem;
-                letter-spacing: 2px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                user-select: all;
-                transition: all 0.3s ease;
-                cursor: pointer;
-            }}
-            
-            .key-display:hover {{
-                background-color: rgba(0, 0, 0, 0.5);
-                transform: translateY(-2px);
-                box-shadow: 0 5px 15px var(--shadow);
-            }}
-            
-            .btn {{
-                display: inline-block;
-                background-color: var(--primary);
-                color: var(--dark);
-                border: none;
-                padding: 0.8rem 1.5rem;
-                font-size: 1rem;
+            .email-highlight {{
+                background-color: rgba(191, 165, 96, 0.2);
+                border-radius: 4px;
+                padding: 0.3rem 0.7rem;
                 font-weight: 600;
-                border-radius: 8px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 6px var(--shadow);
+                color: var(--primary);
+                display: inline-block;
+                margin: 0.5rem 0;
             }}
             
-            .btn:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 7px 10px var(--shadow);
-            }}
-            
-            .btn:active {{
-                transform: translateY(1px);
-            }}
-            
-            .copy-notification {{
-                position: fixed;
-                top: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                background-color: var(--success);
-                color: white;
-                padding: 10px 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-                opacity: 0;
-                transition: opacity 0.3s ease;
-                z-index: 1000;
-            }}
-            
-            .copy-notification.show {{
-                opacity: 1;
-            }}
-            
-            .instructions {{
-                border-top: 1px solid rgba(191, 165, 96, 0.3);
-                margin-top: 2rem;
-                padding-top: 1.5rem;
+            .steps-container {{
+                margin: 2rem 0;
                 text-align: left;
+                border-top: 1px solid rgba(191, 165, 96, 0.3);
+                padding-top: 1.5rem;
             }}
             
-            .instructions h2 {{
+            .steps-title {{
                 font-size: 1.2rem;
                 margin-bottom: 1rem;
                 color: var(--primary);
+                text-align: center;
             }}
             
-            .instructions ol {{
-                margin-left: 1.5rem;
+            .step {{
+                display: flex;
+                align-items: flex-start;
                 margin-bottom: 1.5rem;
             }}
             
-            .instructions li {{
-                margin-bottom: 0.5rem;
+            .step-number {{
+                background-color: var(--primary);
+                color: var(--darker);
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-weight: 700;
+                margin-right: 1rem;
+                flex-shrink: 0;
+            }}
+            
+            .step-content {{
+                flex-grow: 1;
+            }}
+            
+            .step-title {{
+                font-weight: 600;
+                margin-bottom: 0.3rem;
+                color: var(--primary);
+            }}
+            
+            .envelope-icon {{
+                font-size: 2.5rem;
+                margin: 1rem 0;
+                animation: float 3s ease-in-out infinite;
+            }}
+            
+            .notice-box {{
+                background-color: rgba(255, 152, 0, 0.1);
+                border-left: 4px solid var(--warning);
+                padding: 1rem;
+                margin: 1.5rem 0;
+                text-align: left;
+                border-radius: 4px;
             }}
             
             footer {{
@@ -480,6 +698,18 @@ def sucesso():
                 to {{ opacity: 1; transform: translateY(0); }}
             }}
             
+            @keyframes pulse {{
+                0% {{ transform: scale(1); opacity: 1; }}
+                50% {{ transform: scale(1.1); opacity: 0.8; }}
+                100% {{ transform: scale(1); opacity: 1; }}
+            }}
+            
+            @keyframes float {{
+                0% {{ transform: translateY(0px); }}
+                50% {{ transform: translateY(-10px); }}
+                100% {{ transform: translateY(0px); }}
+            }}
+            
             @media (max-width: 640px) {{
                 .card {{
                     padding: 1.5rem;
@@ -488,35 +718,57 @@ def sucesso():
                 h1 {{
                     font-size: 1.5rem;
                 }}
-                
-                .key-display {{
-                    font-size: 1rem;
-                    padding: 0.8rem;
-                }}
             }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="card">
-                <div class="success-icon">✓</div>
+                {'<div class="success-icon">✓</div>' if email_sent else '<div class="warning-icon">⚠️</div>'}
                 <h1>Compra Concluída com Sucesso!</h1>
-                <p>Obrigado pela sua compra. Sua chave de ativação está pronta para uso.</p>
                 
-                <div class="key-container">
-                    <div class="key-display" id="chave" onclick="copyKey()">{chave}</div>
+                <p>Obrigado pela sua compra. {"Sua chave de ativação foi enviada para:" if email_sent else "Tentamos enviar sua chave de ativação para:"}</p>
+                
+                <div class="email-highlight">{email}</div>
+                
+                <div class="envelope-icon">✉️</div>
+                
+                <p>{"Verifique sua caixa de entrada (e a pasta de spam) nos próximos minutos." if email_sent else "Houve um problema ao enviar o email. Entre em contato com nosso suporte para obter ajuda."}</p>
+                
+                {'''
+                <div class="notice-box">
+                    <p><strong>Aviso:</strong> Não foi possível enviar o email com sua chave. 
+                    Por favor, entre em contato com nosso suporte através de <strong>suporte@seudominio.com</strong> 
+                    e informe o ID de transação mostrado abaixo.</p>
                 </div>
+                ''' if not email_sent else ''}
                 
-                <button class="btn" onclick="copyKey()">Copiar Chave</button>
-                
-                <div class="instructions">
-                    <h2>Como utilizar sua chave:</h2>
-                    <ol>
-                        <li>Abra o aplicativo que você deseja ativar</li>
-                        <li>Navegue até a tela de ativação</li>
-                        <li>Cole a chave no campo indicado</li>
-                        <li>Clique em ativar para completar o processo</li>
-                    </ol>
+                <div class="steps-container">
+                    <h2 class="steps-title">Próximos Passos:</h2>
+                    
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <div class="step-title">Verifique seu e-mail</div>
+                            <p>Abra o e-mail que contém sua chave de ativação.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <div class="step-title">Copie sua chave</div>
+                            <p>Selecione e copie a chave de ativação do e-mail.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <div class="step-title">Ative seu produto</div>
+                            <p>Abra o aplicativo e cole sua chave no campo de ativação.</p>
+                        </div>
+                    </div>
                 </div>
                 
                 <footer>
@@ -524,43 +776,6 @@ def sucesso():
                 </footer>
             </div>
         </div>
-        
-        <div class="copy-notification" id="notification">
-            Chave copiada com sucesso!
-        </div>
-        
-        <script>
-            function copyKey() {{
-                const keyText = "{chave}";
-                navigator.clipboard.writeText(keyText)
-                    .then(() => {{
-                        const notification = document.getElementById('notification');
-                        notification.classList.add('show');
-                        
-                        // Highlight effect on the key
-                        const keyDisplay = document.getElementById('chave');
-                        keyDisplay.style.backgroundColor = 'rgba(76, 175, 80, 0.2)';
-                        
-                        setTimeout(() => {{
-                            notification.classList.remove('show');
-                            keyDisplay.style.backgroundColor = '';
-                        }}, 2000);
-                    }})
-                    .catch(err => {{
-                        console.error('Erro ao copiar: ', err);
-                        alert('Não foi possível copiar automaticamente. Por favor, selecione a chave manualmente e copie.');
-                    }});
-            }}
-            
-            // Allow copying by clicking anywhere on the key
-            document.getElementById('chave').addEventListener('click', function(e) {{
-                const range = document.createRange();
-                range.selectNode(this);
-                window.getSelection().removeAllRanges();
-                window.getSelection().addRange(range);
-                copyKey();
-            }});
-        </script>
     </body>
     </html>
     """
