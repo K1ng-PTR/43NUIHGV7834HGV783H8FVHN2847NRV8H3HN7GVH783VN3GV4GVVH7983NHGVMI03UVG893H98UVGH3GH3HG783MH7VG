@@ -418,14 +418,15 @@ def stripe_webhook():
         checkout_link = metadata.get("checkout_link", "")
         # Define o tipo conforme sua lógica
         tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/14k7tX60H3QE6kg14b" else "LifeTime"
-        now_dt = datetime.datetime.now().isoformat()
+        
+        # Removida a definição de data_ativacao aqui
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
         registro = {
             "hwid": "",  # Ainda não vinculado
             "chave": chave,
             "activation_id": activation_id,
-            "data_ativacao": now_dt,
+            "data_ativacao": None,  # Definido como None em vez de now_dt
             "tipo": tipo
         }
         try:
