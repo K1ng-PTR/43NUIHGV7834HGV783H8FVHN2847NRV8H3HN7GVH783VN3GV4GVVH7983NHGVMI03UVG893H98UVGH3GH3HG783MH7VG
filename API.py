@@ -13,9 +13,12 @@ from flask import Flask, request, jsonify, render_template_string, redirect, url
 from dotenv import load_dotenv
 import stripe
 from supabase import create_client, Client
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 load_dotenv()
 app = Flask(__name__)
+CORS(app, origins=["https://verifykeys.netlify.app"])
 
 # === VARIÁVEIS DE AMBIENTE ===
 SUPER_PASSWORD = os.environ.get("GEN_PASSWORD")
@@ -1201,7 +1204,6 @@ def check_key():
     data = request.get_json()
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
-
     chave = data.get("chave")
     
     try:
@@ -1209,14 +1211,12 @@ def check_key():
     except Exception as e:
         print("Erro ao consultar o banco:", e)
         return jsonify({"error": "Ocorreu um erro", "details": str(e)}), 500
-
     if not res.data:
         return jsonify({
             "valid": False,
             "found": False,
             "message": "Chave não encontrada no sistema."
         }), 200
-
     registro = res.data[0]
     
     status = {
