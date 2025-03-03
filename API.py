@@ -1196,6 +1196,76 @@ DARK_TEMPLATE = """
 </html>
 """
 
+@app.route('/check-key', methods=['POST'])
+def check_key():
+    data = request.get_json()
+    if not data or 'chave' not in data:
+        return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
+
+    chave = data.get("chave")
+    
+    try:
+        res = supabase.table("activations").select("*").eq("chave", chave).execute()
+    except Exception as e:
+        print("Erro ao consultar o banco:", e)
+        return jsonify({"error": "Ocorreu um erro", "details": str(e)}), 500
+
+    if not res.data:
+        return jsonify({
+            "valid": False,
+            "found": False,
+            "message": "Chave não encontrada no sistema."
+        }), 200
+
+    registro = res.data[0]
+    
+    status = {
+        "valid": True,
+        "found": True,
+        "chave": chave,
+        "tipo": registro.get("tipo"),
+        "hwid": registro.get("hwid", ""),
+        "activation_id": registro.get("activation_id", ""),
+        "data_ativacao": registro.get("data_ativacao"),
+        "revoked": registro.get("revoked", False)
+    }
+    
+    # Verificar se a chave foi revogada
+    if registro.get("revoked"):
+        status["message"] = "Esta chave foi revogada e não pode mais ser utilizada."
+        return jsonify(status), 200
+    
+    # Verificar se já está ativada (tem HWID)
+    if registro.get("hwid"):
+        status["activated"] = True
+        
+        # Para chaves do tipo "Uso Único", verifica expiração
+        if registro.get("tipo") == "Uso Único" and registro.get("data_ativacao"):
+            try:
+                activation_date = datetime.datetime.fromisoformat(registro.get("data_ativacao"))
+                expiration_date = activation_date + datetime.timedelta(days=1)
+                now = datetime.datetime.now()
+                
+                status["expiration_date"] = expiration_date.isoformat()
+                status["expired"] = now > expiration_date
+                
+                if status["expired"]:
+                    status["message"] = "Esta chave de Uso Único está expirada."
+                else:
+                    remaining_time = expiration_date - now
+                    hours = remaining_time.seconds // 3600
+                    minutes = (remaining_time.seconds % 3600) // 60
+                    status["message"] = f"Chave de Uso Único ativa. Expira em {hours}h {minutes}min."
+            except Exception as e:
+                status["message"] = "Chave ativada, mas há um problema com a data de ativação."
+        else:
+            status["message"] = "Chave LifeTime ativada e válida."
+    else:
+        status["activated"] = False
+        status["message"] = "Chave válida, mas ainda não foi ativada em nenhum dispositivo."
+    
+    return jsonify(status), 200
+
 @app.route("/auth-hwid", methods=["GET", "POST"])
 def auth_hwid():
     authenticated = False
