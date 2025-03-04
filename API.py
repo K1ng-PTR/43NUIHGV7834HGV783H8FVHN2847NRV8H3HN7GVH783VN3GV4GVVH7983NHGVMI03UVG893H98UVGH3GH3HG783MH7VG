@@ -1361,14 +1361,13 @@ def generate_verification_code():
 # exigindo os campos "chave", "password" e "email".
 def process_verification_request(data):
     # Verifica se os campos obrigatórios foram enviados
-    required_fields = ['chave', 'password', 'email']
+    required_fields = ['chave', 'password']
     for field in required_fields:
         if field not in data or not data.get(field):
             return jsonify({"error": f"O campo '{field}' é obrigatório."}), 400
 
     chave = data.get("chave")
     provided_password = data.get("password")
-    provided_email = data.get("email")
 
     # Validação da password (neste exemplo, comparamos com ADMIN_PASSWORD; ajuste conforme necessário)
     if provided_password != ADMIN_PASSWORD:
@@ -1381,14 +1380,10 @@ def process_verification_request(data):
             return jsonify({"error": "Chave não encontrada."}), 404
         registro = res.data[0]
 
-        # Verifica se há um email registrado para esta chave
+        # Recupera o email registrado para esta chave
         email_registrado = registro.get("email")
         if not email_registrado:
             return jsonify({"error": "Não há email registrado para esta chave."}), 400
-
-        # Verifica se o email informado confere com o email registrado
-        if email_registrado != provided_email:
-            return jsonify({"error": "O email informado não confere com o email registrado para esta chave."}), 400
 
     except Exception as e:
         return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
@@ -1426,7 +1421,7 @@ def process_verification_request(data):
 
     msg = MIMEMultipart()
     msg['From'] = EMAIL_FROM
-    msg['To'] = provided_email
+    msg['To'] = email_registrado
     msg['Subject'] = subject
     msg.attach(MIMEText(html_content, 'html'))
 
@@ -1438,7 +1433,7 @@ def process_verification_request(data):
         server.quit()
         return jsonify({
             "success": True, 
-            "message": f"Código de verificação enviado para {provided_email}"
+            "message": f"Código de verificação enviado para {email_registrado}"
         }), 200
     except Exception as e:
         print(f"Erro ao enviar email: {str(e)}")
