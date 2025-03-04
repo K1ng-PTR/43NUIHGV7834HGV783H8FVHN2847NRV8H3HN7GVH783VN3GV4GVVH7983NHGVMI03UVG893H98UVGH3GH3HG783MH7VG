@@ -1284,6 +1284,33 @@ DARK_TEMPLATE = """
                 });
             });
         }
+        document.getElementById('verification-form').addEventListener('submit', function(e) {
+            e.preventDefault(); // Impede o envio padrão do formulário
+            
+            // Cria um objeto com os dados do formulário
+            const formData = new FormData(this);
+            const data = {};
+            formData.forEach((value, key) => {
+                data[key] = value;
+            });
+        
+            // Envia os dados via fetch como JSON
+            fetch('/request-key-transfer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                console.log(result);
+                // Aqui você pode tratar a resposta, exibir mensagens etc.
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+            });
+        });
     </script>
 </body>
 </html>
