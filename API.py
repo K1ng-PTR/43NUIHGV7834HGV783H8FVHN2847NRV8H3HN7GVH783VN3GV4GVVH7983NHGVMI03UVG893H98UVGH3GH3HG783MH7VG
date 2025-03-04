@@ -2066,17 +2066,20 @@ def verify_code():
         if code != stored_code:
             return jsonify({"error": "Código de verificação inválido."}), 400
 
-        # Código válido - Revoga a chave antiga e cria uma nova
+        # Recupera informações importantes da chave antiga
         activation_id_old = registro.get("activation_id")
+        email = registro.get("email")
+        tipo_original = registro.get("tipo")
+
+        # Revoga a chave antiga
         revoke_update = {"revoked": True}
         supabase.table("activations").update(revoke_update).eq("activation_id", activation_id_old).execute()
 
-        # Gera nova chave do mesmo tipo da antiga
-        tipo_original = registro.get("tipo")
+        # Gera nova chave
         new_key = generate_key()
         new_activation_id = generate_activation_id("", new_key)
-        email = registro.get("email")
 
+        # Cria novo registro com a nova chave
         new_record = {
             "hwid": "",  # Ainda não vinculado
             "chave": new_key,
@@ -2087,19 +2090,25 @@ def verify_code():
             "email": email  # Mantém o email usado na chave que foi transferida
         }
 
+        # Insere o novo registro no banco de dados
         insert_res = supabase.table("activations").insert(new_record).execute()
         if not insert_res.data:
             return jsonify({"error": "Erro ao gerar nova chave."}), 500
 
-        # Limpa o código de verificação usado na chave antiga
+        # Limpa o código de verificação usado
         clear_code = {
             "verification_code": None,
             "verification_code_expires": None
         }
         supabase.table("activations").update(clear_code).eq("chave", chave).execute()
 
-        # Redireciona para /auth-hwid/authorize com a nova chave e o email registrado
-        return redirect(url_for('auth_hwid_authorize', new_key=new_key, email=email))
+        # Retorna a nova chave para ser usada no frontend
+        return jsonify({
+            "success": True,
+            "new_key": new_key,
+            "email": email,
+            "activation_id": new_activation_id
+        }), 200
 
     except Exception as e:
         return jsonify({"error": "Erro ao processar a verificação", "details": str(e)}), 500
