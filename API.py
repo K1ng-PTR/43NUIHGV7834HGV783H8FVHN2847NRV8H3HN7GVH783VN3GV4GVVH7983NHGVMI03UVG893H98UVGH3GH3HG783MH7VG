@@ -2226,7 +2226,7 @@ def auth_hwid_authorize():
     """
     return response_html, 200
 
-@app.route('/auth-hwid/verify-code', methods=['POST'])
+@app.route('/auth-hwid/verify-code', methods=['POST'], endpoint='verify_code_auth')
 def verify_code():
     data = request.form if request.form else request.json
     
