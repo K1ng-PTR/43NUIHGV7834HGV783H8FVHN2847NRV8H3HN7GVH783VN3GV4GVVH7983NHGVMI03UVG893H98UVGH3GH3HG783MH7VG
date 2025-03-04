@@ -1811,11 +1811,16 @@ verify_code_html = """
 """
 
 # Novo endpoint que renderiza o template de verificação
-@app.route('/verify-code', methods=['GET'])
-def verify_code_page():
-    # Se desejar pré-preencher a chave, passe-a na query string: /verify-code?chave=XXXXX-XXXXX-XXXXX-XXXXX
-    chave = request.args.get('chave', '')
-    return render_template_string(verify_code_html, admin_password=ADMIN_PASSWORD, chave=chave)
+@app.route('/verify-code', methods=['GET', 'POST'])
+def verify_code():
+    if request.method == 'GET':
+        # Renderiza o template para solicitação de verificação
+        chave = request.args.get('chave', '')
+        return render_template_string(verify_code_html, admin_password=ADMIN_PASSWORD, chave=chave)
+    else:
+        # Para POST, processa os dados enviados pelo formulário
+        data = request.form or request.get_json()
+        return process_verification_request(data)
 
 # Endpoint que utiliza a função auxiliar para /request-key-transfer
 @app.route('/request-key-transfer', methods=['POST'])
