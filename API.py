@@ -1819,7 +1819,7 @@ def verify_code():
         return render_template_string(verify_code_html, admin_password=ADMIN_PASSWORD, chave=chave)
     else:
         # Para POST, processa os dados enviados pelo formulário
-        data = request.form or request.get_json()
+        data = request.form if request.form else request.get_json()  # Tenta pegar JSON ou dados do formulário
         return process_verification_request(data)
 
 # Endpoint que utiliza a função auxiliar para /request-key-transfer
