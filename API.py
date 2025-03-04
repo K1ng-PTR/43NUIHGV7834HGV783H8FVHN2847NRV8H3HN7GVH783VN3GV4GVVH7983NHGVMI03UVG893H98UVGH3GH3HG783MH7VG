@@ -1357,6 +1357,89 @@ def check_key():
     
     return jsonify(status), 200
 
+def generate_verification_code():
+    """Gera um código de verificação de 6 dígitos."""
+    return ''.join(random.choices(string.digits, k=6))
+
+@app.route('/request-verification', methods=['POST'])
+def request_verification():
+    data = request.get_json()
+    if not data or 'chave' not in data:
+        return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
+    
+    chave = data.get("chave")
+    
+    try:
+        # Busca o registro da chave
+        res = supabase.table("activations").select("*").eq("chave", chave).execute()
+        
+        if not res.data:
+            return jsonify({"error": "Chave não encontrada."}), 404
+        
+        registro = res.data[0]
+        email = registro.get("email")
+        
+        if not email:
+            return jsonify({"error": "Não há email registrado para esta chave."}), 400
+        
+        # Gera o código de verificação
+        verification_code = generate_verification_code()
+        
+        # Define a validade do código (24 horas)
+        expires_at = (datetime.datetime.now() + datetime.timedelta(hours=24)).isoformat()
+        
+        # Atualiza o registro com o código de verificação
+        update_data = {
+            "verification_code": verification_code,
+            "verification_code_expires": expires_at
+        }
+        
+        supabase.table("activations").update(update_data).eq("chave", chave).execute()
+        
+        # Envia o email com o código de verificação
+        subject = "Código de Verificação para Transferência de Chave"
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px;">Código de Verificação</h2>
+            <p>Olá,</p>
+            <p>Recebemos uma solicitação para transferência da sua chave de licença. Para continuar com o processo, forneça o código abaixo ao suporte:</p>
+            <div style="background-color: #f8f9fa; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0; font-size: 18px; text-align: center; letter-spacing: 5px; font-weight: bold;">
+                {verification_code}
+            </div>
+            <p>Este código é válido por 24 horas. Se você não solicitou esta transferência, por favor, ignore este email.</p>
+            <p>Atenciosamente,<br>Equipe de Suporte</p>
+        </body>
+        </html>
+        """
+        
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_FROM
+        msg['To'] = email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        try:
+            server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASSWORD)
+            server.send_message(msg)
+            server.quit()
+            
+            return jsonify({
+                "success": True, 
+                "message": f"Código de verificação enviado para {email}"
+            }), 200
+        except Exception as e:
+            print(f"Erro ao enviar email: {str(e)}")
+            return jsonify({
+                "error": "Falha ao enviar o código de verificação por email.",
+                "details": str(e)
+            }), 500
+            
+    except Exception as e:
+        return jsonify({"error": "Erro ao processar a solicitação", "details": str(e)}), 500
+
 @app.route("/auth-hwid", methods=["GET", "POST"])
 def auth_hwid():
     authenticated = False
@@ -1753,89 +1836,6 @@ def auth_hwid_authorize():
     </html>
     """
     return response_html, 200
-
-def generate_verification_code():
-    """Gera um código de verificação de 6 dígitos."""
-    return ''.join(random.choices(string.digits, k=6))
-
-@app.route('/request-verification', methods=['POST'])
-def request_verification():
-    data = request.get_json()
-    if not data or 'chave' not in data:
-        return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
-    
-    chave = data.get("chave")
-    
-    try:
-        # Busca o registro da chave
-        res = supabase.table("activations").select("*").eq("chave", chave).execute()
-        
-        if not res.data:
-            return jsonify({"error": "Chave não encontrada."}), 404
-        
-        registro = res.data[0]
-        email = registro.get("email")
-        
-        if not email:
-            return jsonify({"error": "Não há email registrado para esta chave."}), 400
-        
-        # Gera o código de verificação
-        verification_code = generate_verification_code()
-        
-        # Define a validade do código (24 horas)
-        expires_at = (datetime.datetime.now() + datetime.timedelta(hours=24)).isoformat()
-        
-        # Atualiza o registro com o código de verificação
-        update_data = {
-            "verification_code": verification_code,
-            "verification_code_expires": expires_at
-        }
-        
-        supabase.table("activations").update(update_data).eq("chave", chave).execute()
-        
-        # Envia o email com o código de verificação
-        subject = "Código de Verificação para Transferência de Chave"
-        html_content = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px;">Código de Verificação</h2>
-            <p>Olá,</p>
-            <p>Recebemos uma solicitação para transferência da sua chave de licença. Para continuar com o processo, forneça o código abaixo ao suporte:</p>
-            <div style="background-color: #f8f9fa; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0; font-size: 18px; text-align: center; letter-spacing: 5px; font-weight: bold;">
-                {verification_code}
-            </div>
-            <p>Este código é válido por 24 horas. Se você não solicitou esta transferência, por favor, ignore este email.</p>
-            <p>Atenciosamente,<br>Equipe de Suporte</p>
-        </body>
-        </html>
-        """
-        
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_FROM
-        msg['To'] = email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(html_content, 'html'))
-        
-        try:
-            server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-            server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            server.send_message(msg)
-            server.quit()
-            
-            return jsonify({
-                "success": True, 
-                "message": f"Código de verificação enviado para {email}"
-            }), 200
-        except Exception as e:
-            print(f"Erro ao enviar email: {str(e)}")
-            return jsonify({
-                "error": "Falha ao enviar o código de verificação por email.",
-                "details": str(e)
-            }), 500
-            
-    except Exception as e:
-        return jsonify({"error": "Erro ao processar a solicitação", "details": str(e)}), 500
 
 @app.route('/auth-hwid/verify-code', methods=['POST'])
 def verify_code():
