@@ -1387,95 +1387,101 @@ def generate_verification_code():
     """Gera um código de verificação de 6 dígitos."""
     return ''.join(random.choices(string.digits, k=6))
 
-# Função auxiliar centralizada para processar a requisição de verificação
+# Função auxiliar modificada para processar a solicitação de transferência de chave,
+# exigindo os campos "chave", "password" e "email".
 def process_verification_request(data):
-    if not data or 'chave' not in data:
-        return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
-    
+    # Verifica se os campos obrigatórios foram enviados
+    required_fields = ['chave', 'password', 'email']
+    for field in required_fields:
+        if field not in data or not data.get(field):
+            return jsonify({"error": f"O campo '{field}' é obrigatório."}), 400
+
     chave = data.get("chave")
-    
+    provided_password = data.get("password")
+    provided_email = data.get("email")
+
+    # Validação da password (neste exemplo, comparamos com ADMIN_PASSWORD; ajuste conforme necessário)
+    if provided_password != ADMIN_PASSWORD:
+        return jsonify({"error": "Password inválida."}), 401
+
     try:
         # Busca o registro da chave no Supabase
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
-        
         if not res.data:
             return jsonify({"error": "Chave não encontrada."}), 404
-        
         registro = res.data[0]
-        email = registro.get("email")
-        
-        if not email:
+
+        # Verifica se há um email registrado para esta chave
+        email_registrado = registro.get("email")
+        if not email_registrado:
             return jsonify({"error": "Não há email registrado para esta chave."}), 400
-        
-        # Gera o código de verificação
-        verification_code = generate_verification_code()
-        
-        # Define a validade do código (24 horas)
-        expires_at = (datetime.datetime.now() + datetime.timedelta(hours=24)).isoformat()
-        
-        # Atualiza o registro com o código de verificação
-        update_data = {
-            "verification_code": verification_code,
-            "verification_code_expires": expires_at
-        }
-        
-        supabase.table("activations").update(update_data).eq("chave", chave).execute()
-        
-        # Envia o email com o código de verificação
-        subject = "Código de Verificação para Transferência de Chave"
-        html_content = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px;">Código de Verificação</h2>
-            <p>Olá,</p>
-            <p>Recebemos uma solicitação para transferência da sua chave de licença. Para continuar com o processo, forneça o código abaixo ao suporte:</p>
-            <div style="background-color: #f8f9fa; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0; font-size: 18px; text-align: center; letter-spacing: 5px; font-weight: bold;">
-                {verification_code}
-            </div>
-            <p>Este código é válido por 24 horas. Se você não solicitou esta transferência, por favor, ignore este email.</p>
-            <p>Atenciosamente,<br>Equipe de Suporte</p>
-        </body>
-        </html>
-        """
-        
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_FROM
-        msg['To'] = email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(html_content, 'html'))
-        
-        try:
-            server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-            server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            server.send_message(msg)
-            server.quit()
-            
-            return jsonify({
-                "success": True, 
-                "message": f"Código de verificação enviado para {email}"
-            }), 200
-        except Exception as e:
-            print(f"Erro ao enviar email: {str(e)}")
-            return jsonify({
-                "error": "Falha ao enviar o código de verificação por email.",
-                "details": str(e)
-            }), 500
-            
+
+        # Verifica se o email informado confere com o email registrado
+        if email_registrado != provided_email:
+            return jsonify({"error": "O email informado não confere com o email registrado para esta chave."}), 400
+
     except Exception as e:
-        return jsonify({"error": "Erro ao processar a solicitação", "details": str(e)}), 500
+        return jsonify({"error": "Erro ao consultar o banco", "details": str(e)}), 500
+
+    # Gera o código de verificação de 6 dígitos
+    verification_code = generate_verification_code()
+    # Define a validade do código (24 horas)
+    expires_at = (datetime.datetime.now() + datetime.timedelta(hours=24)).isoformat()
+
+    update_data = {
+        "verification_code": verification_code,
+        "verification_code_expires": expires_at
+    }
+    try:
+        supabase.table("activations").update(update_data).eq("chave", chave).execute()
+    except Exception as e:
+        return jsonify({"error": "Erro ao atualizar registro", "details": str(e)}), 500
+
+    # Prepara o email com o código de verificação
+    subject = "Código de Verificação para Transferência de Chave"
+    html_content = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px;">Código de Verificação</h2>
+        <p>Olá,</p>
+        <p>Recebemos uma solicitação para transferência da sua chave de licença. Para continuar com o processo, utilize o código abaixo:</p>
+        <div style="background-color: #f8f9fa; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0; font-size: 18px; text-align: center; letter-spacing: 5px; font-weight: bold;">
+            {verification_code}
+        </div>
+        <p>Este código é válido por 24 horas.</p>
+        <p>Atenciosamente,<br>Equipe de Suporte</p>
+    </body>
+    </html>
+    """
+
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_FROM
+    msg['To'] = provided_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(html_content, 'html'))
+
+    try:
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        return jsonify({
+            "success": True, 
+            "message": f"Código de verificação enviado para {provided_email}"
+        }), 200
+    except Exception as e:
+        print(f"Erro ao enviar email: {str(e)}")
+        return jsonify({
+            "error": "Falha ao enviar o código de verificação por email.",
+            "details": str(e)
+        }), 500
 
 # Endpoint que utiliza a função auxiliar para /request-key-transfer
 @app.route('/request-key-transfer', methods=['POST'])
 def request_key_transfer():
     data = request.get_json() or request.form
     print("Dados recebidos:", data)
-    return process_verification_request(data)
-
-# Endpoint que utiliza a função auxiliar para /request-verification
-@app.route('/request-verification', methods=['POST'])
-def request_verification():
-    data = request.get_json() or request.form
     return process_verification_request(data)
 
 @app.route("/auth-hwid", methods=["GET", "POST"])
