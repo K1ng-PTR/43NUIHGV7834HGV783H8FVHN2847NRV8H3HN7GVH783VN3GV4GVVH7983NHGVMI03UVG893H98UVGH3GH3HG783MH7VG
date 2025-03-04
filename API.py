@@ -1055,6 +1055,7 @@ DARK_TEMPLATE = """
                         <td>
                             {% if not r.authorized %}
                                 <form method="post" action="{{ url_for('verify_code') }}" class="auth-form">
+                                    <input type="hidden" name="password" value="{{ admin_password }}">
                                     <input type="hidden" name="chave" value="{{ r.chave }}">
                                     <button type="submit" class="action-btn">
                                         <i class="fas fa-check"></i> Pedir Verificação
@@ -1065,7 +1066,7 @@ DARK_TEMPLATE = """
                                 <button class="action-btn" style="background-color: var(--danger);" onclick="revokeAuth({{ r.activation_id }})">
                                     <i class="fas fa-ban"></i> Revogar
                                 </button>
-                            {% endif %}}
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -1277,16 +1278,17 @@ def generate_verification_code():
 # exigindo os campos "chave", "password" e "email".
 def process_verification_request(data):
     # Verifica se os campos obrigatórios foram enviados
-    required_fields = ['chave', 'password']
-    for field in required_fields:
-        if field not in data or not data.get(field):
-            return jsonify({"error": f"O campo '{field}' é obrigatório."}), 400
+    password = data.get('password')
+    chave = data.get('chave')
 
-    chave = data.get("chave")
-    provided_password = data.get("password")
+    # Valida a existência dos campos
+    if not password:
+        return jsonify({"error": "O campo 'password' é obrigatório."}), 400
+    if not chave:
+        return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
 
-    # Validação da password (neste exemplo, comparamos com ADMIN_PASSWORD; ajuste conforme necessário)
-    if provided_password != ADMIN_PASSWORD:
+    # Validação da password
+    if password != ADMIN_PASSWORD:
         return jsonify({"error": "Password inválida."}), 401
 
     try:
