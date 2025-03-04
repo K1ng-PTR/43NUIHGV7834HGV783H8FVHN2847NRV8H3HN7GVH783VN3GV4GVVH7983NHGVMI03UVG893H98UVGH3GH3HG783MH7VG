@@ -1097,8 +1097,6 @@ DARK_TEMPLATE = """
     </div>
     
     <div id="toast" class="toast">Ação realizada com sucesso!</div>
-    
-    <script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Login animation
