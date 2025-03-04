@@ -1360,17 +1360,15 @@ def generate_verification_code():
     """Gera um código de verificação de 6 dígitos."""
     return ''.join(random.choices(string.digits, k=6))
 
-@app.route('/request-verification', methods=['POST'])
-def request_verification():
-    # Suporta tanto JSON quanto form-data
-    data = request.get_json() or request.form
+# Função auxiliar centralizada para processar a requisição de verificação
+def process_verification_request(data):
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
     
     chave = data.get("chave")
     
     try:
-        # Busca o registro da chave
+        # Busca o registro da chave no Supabase
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
         
         if not res.data:
@@ -1440,16 +1438,17 @@ def request_verification():
     except Exception as e:
         return jsonify({"error": "Erro ao processar a solicitação", "details": str(e)}), 500
 
+# Endpoint que utiliza a função auxiliar para /request-key-transfer
 @app.route('/request-key-transfer', methods=['POST'])
 def request_key_transfer():
-    # Aceita tanto JSON quanto form data
     data = request.get_json() or request.form
-    if not data or 'chave' not in data:
-        return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
-    
-    chave = data.get("chave")
-    # Chama a função que já criamos para enviar o código de verificação
-    return request_verification()
+    return process_verification_request(data)
+
+# Endpoint que utiliza a função auxiliar para /request-verification
+@app.route('/request-verification', methods=['POST'])
+def request_verification():
+    data = request.get_json() or request.form
+    return process_verification_request(data)
 
 @app.route("/auth-hwid", methods=["GET", "POST"])
 def auth_hwid():
