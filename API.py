@@ -1043,8 +1043,6 @@ DARK_TEMPLATE = """
                     <tr>
                         <td>{{ r.activation_id }}</td>
                         <td>{{ r.chave }}</td>
-                        <td>
-                        </td>
                         <td title="{{ r.hwid or 'Não definido' }}">{{ r.hwid or "N/D" }}</td>
                         <td>{{ r.data_ativacao or "N/D" }}</td>
                         <td>
