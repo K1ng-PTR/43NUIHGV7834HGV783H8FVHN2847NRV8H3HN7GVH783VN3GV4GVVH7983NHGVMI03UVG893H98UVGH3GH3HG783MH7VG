@@ -1097,191 +1097,107 @@ DARK_TEMPLATE = """
     </div>
     
     <div id="toast" class="toast">Ação realizada com sucesso!</div>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Login animation
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            loginForm.addEventListener('submit', function(e) {
-                const submitBtn = this.querySelector('button[type="submit"]');
-                submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Entrando...';
-            });
-        }
-        
-        // Search functionality
-        const searchInput = document.getElementById('searchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', function() {
-                const searchTerm = this.value.toLowerCase();
-                const rows = document.querySelectorAll('#records-table tbody tr');
-                
-                rows.forEach(row => {
-                    const chave = row.cells[1].textContent.toLowerCase();
-                    const hwid = row.cells[3].textContent.toLowerCase();
-                    
-                    if (chave.includes(searchTerm) || hwid.includes(searchTerm)) {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-            });
-        }
-        
-        // Pagination
-        const table = document.getElementById('records-table');
-        if (table) {
-            const rowsPerPage = 5;
-            const rows = table.querySelectorAll('tbody tr');
-            const pageCount = Math.ceil(rows.length / rowsPerPage);
-            let currentPage = 1;
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Mostrar/ocultar o formulário de verificação
+            const showVerificationBtn = document.getElementById('show-verification');
+            const verificationForm = document.getElementById('verification-form');
+            const mainContent = document.querySelector('.table-container');
+            const searchBox = document.querySelector('.search-box');
+            const actionButtons = document.querySelector('.action-buttons');
+            const pagination = document.querySelector('.pagination');
             
-            function showPage(page) {
-                const start = (page - 1) * rowsPerPage;
-                const end = start + rowsPerPage;
-                
-                rows.forEach((row, index) => {
-                    row.style.display = (index >= start && index < end) ? '' : 'none';
+            if (showVerificationBtn && verificationForm) {
+                showVerificationBtn.addEventListener('click', function() {
+                    verificationForm.classList.remove('hidden');
+                    mainContent.classList.add('hidden');
+                    searchBox.classList.add('hidden');
+                    actionButtons.classList.add('hidden');
+                    pagination.classList.add('hidden');
+                });
+        
+                document.getElementById('back-to-main').addEventListener('click', function() {
+                    verificationForm.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                    searchBox.classList.remove('hidden');
+                    actionButtons.classList.remove('hidden');
+                    pagination.classList.remove('hidden');
                 });
             }
             
-            showPage(currentPage);
-            
-            document.getElementById('prevPage').addEventListener('click', function() {
-                if (currentPage > 1) {
-                    currentPage--;
-                    showPage(currentPage);
-                }
-            });
-            
-            document.getElementById('nextPage').addEventListener('click', function() {
-                if (currentPage < pageCount) {
-                    currentPage++;
-                    showPage(currentPage);
-                }
-            });
-        }
-        
-        // Form submissions with toast notification (para formulários de autorização)
-        const authForms = document.querySelectorAll('.auth-form');
-        authForms.forEach(form => {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const submitBtn = this.querySelector('button[type="submit"]');
-                const originalHTML = submitBtn.innerHTML;
-                submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
-                submitBtn.disabled = true;
+            // Toast notification
+            function showToast(message) {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.classList.add('show');
                 
                 setTimeout(() => {
-                    this.submit();
-                    showToast('Autorização concedida com sucesso!');
-                }, 500);
-            });
-        });
-        
-        // Toast notification
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.classList.add('show');
-            
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
-        
-        // HWID revoke function (exemplo)
-        window.revokeAuth = function(id) {
-            if (confirm('Tem certeza que deseja revogar esta autorização?')) {
-                showToast('Autorização revogada com sucesso!');
-                // Aqui você trataria a revogação via backend
+                    toast.classList.remove('show');
+                }, 3000);
             }
-        };
         
-        // Logout button
-        const logoutBtn = document.querySelector('.logout-btn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', function() {
-                if (confirm('Deseja realmente sair?')) {
-                    window.location.href = "{{ url_for('auth_hwid') }}";
-                }
-            });
-        }
-        
-        // Mostrar/ocultar o formulário de verificação
-        const showVerificationBtn = document.getElementById('show-verification');
-        const verificationForm = document.getElementById('verification-form');
-        const mainContent = document.querySelector('.table-container');
-        const searchBox = document.querySelector('.search-box');
-        const actionButtons = document.querySelector('.action-buttons');
-        const pagination = document.querySelector('.pagination');
-        
-        if (showVerificationBtn && verificationForm) {
-            showVerificationBtn.addEventListener('click', function() {
-                verificationForm.classList.remove('hidden');
-                mainContent.classList.add('hidden');
-                searchBox.classList.add('hidden');
-                actionButtons.classList.add('hidden');
-                pagination.classList.add('hidden');
-            });
-        
-            document.getElementById('back-to-main').addEventListener('click', function() {
-                verificationForm.classList.add('hidden');
-                mainContent.classList.remove('hidden');
-                searchBox.classList.remove('hidden');
-                actionButtons.classList.remove('hidden');
-                pagination.classList.remove('hidden');
-            });
-        }
-        
-        // Handle verification form submission (para o formulário de verificação de código)
-        const codeVerifyForm = document.getElementById('code-verify-form');
-        if (codeVerifyForm) {
-            codeVerifyForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const submitBtn = this.querySelector('button[type="submit"]');
-                const originalHTML = submitBtn.innerHTML;
-                submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verificando...';
-                submitBtn.disabled = true;
-                
-                const formData = new FormData(this);
-                fetch('{{ url_for("verify_code") }}', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast(`Nova chave gerada: ${data.new_key}`);
-                        this.innerHTML = `
-                            <div class="input-group">
-                                <h3>Transferência concluída!</h3>
-                                <p>Chave antiga: <strong>${data.old_key}</strong></p>
-                                <p>Nova chave: <strong>${data.new_key}</strong></p>
-                                <p>Tipo: ${data.tipo}</p>
-                            </div>
-                            <button type="button" id="reset-form" class="action-btn">
-                                <i class="fas fa-redo"></i> Nova Verificação
-                            </button>
-                        `;
-                        document.getElementById('reset-form').addEventListener('click', function() {
-                            window.location.reload();
-                        });
-                    } else {
-                        showToast(`Erro: ${data.error}`);
+            // Handle verification form submission
+            const codeVerifyForm = document.getElementById('code-verify-form');
+            if (codeVerifyForm) {
+                codeVerifyForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    const originalHTML = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verificando...';
+                    submitBtn.disabled = true;
+                    
+                    const formData = new FormData(this);
+                    
+                    // Converte FormData para objeto JSON
+                    const data = Object.fromEntries(formData.entries());
+                    
+                    fetch('{{ url_for("verify_code_auth") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Atualiza o formulário com os detalhes da nova chave
+                            this.innerHTML = `
+                                <div class="input-group">
+                                    <h3>Transferência concluída!</h3>
+                                    <p>Chave antiga: <strong>${data.old_key || 'Não disponível'}</strong></p>
+                                    <p>Nova chave: <strong>${data.new_key}</strong></p>
+                                    <p>Tipo: ${data.tipo || 'Não especificado'}</p>
+                                </div>
+                                <button type="button" id="reset-form" class="action-btn">
+                                    <i class="fas fa-redo"></i> Nova Verificação
+                                </button>
+                            `;
+                            
+                            // Mostra toast de sucesso
+                            showToast(`Transferência de chave concluída com sucesso!`);
+                            
+                            // Adiciona evento para recarregar a página
+                            document.getElementById('reset-form').addEventListener('click', function() {
+                                window.location.reload();
+                            });
+                        } else {
+                            // Mostra erro se a transferência falhar
+                            showToast(`Erro: ${data.error || 'Falha na transferência'}`);
+                            submitBtn.innerHTML = originalHTML;
+                            submitBtn.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro:', error);
+                        showToast('Erro ao processar a solicitação.');
                         submitBtn.innerHTML = originalHTML;
                         submitBtn.disabled = false;
-                    }
-                })
-                .catch(error => {
-                    showToast('Erro ao processar a solicitação.');
-                    submitBtn.innerHTML = originalHTML;
-                    submitBtn.disabled = false;
+                    });
                 });
-            });
-        }
-    });
-</script>
+            }
+        });
+    </script>
 </body>
 </html>
 """
@@ -2031,7 +1947,7 @@ def auth_hwid_authorize():
 
 @app.route('/auth-hwid/verify-code', methods=['POST'], endpoint='verify_code_auth')
 def verify_code():
-    data = request.form if request.form else request.json
+    data = request.get_json()  # Alterado para receber JSON diretamente
 
     admin_pass = data.get("password")
     if admin_pass != ADMIN_PASSWORD:
@@ -2067,6 +1983,7 @@ def verify_code():
             return jsonify({"error": "Código de verificação inválido."}), 400
 
         # Recupera informações importantes da chave antiga
+        old_key = registro.get("chave")
         activation_id_old = registro.get("activation_id")
         email = registro.get("email")
         tipo_original = registro.get("tipo")
@@ -2102,12 +2019,13 @@ def verify_code():
         }
         supabase.table("activations").update(clear_code).eq("chave", chave).execute()
 
-        # Retorna a nova chave para ser usada no frontend
+        # Retorna detalhes da transferência
         return jsonify({
             "success": True,
+            "old_key": old_key,
             "new_key": new_key,
-            "email": email,
-            "activation_id": new_activation_id
+            "tipo": tipo_original,
+            "email": email
         }), 200
 
     except Exception as e:
