@@ -1054,7 +1054,8 @@ DARK_TEMPLATE = """
                         </td>
                         <td>
                             {% if not r.authorized %}
-                                <form href="{{ url_for('verify_code_page') }}?chave={{ r.chave }}" class="auth-form">
+                                <form method="post" action="{{ url_for('verify_code_page') }}" class="auth-form">
+                                    <input type="hidden" name="chave" value="{{ r.chave }}">
                                     <button type="submit" class="action-btn">
                                         <i class="fas fa-check"></i> Pedir Verificação
                                     </button>
@@ -1098,116 +1099,117 @@ DARK_TEMPLATE = """
     <div id="toast" class="toast">Ação realizada com sucesso!</div>
     
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Login animation
-            const loginForm = document.getElementById('login-form');
-            if (loginForm) {
-                loginForm.addEventListener('submit', function(e) {
-                    const submitBtn = this.querySelector('button[type="submit"]');
-                    submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Entrando...';
-                });
-            }
-            
-            // Search functionality
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.addEventListener('input', function() {
-                    const searchTerm = this.value.toLowerCase();
-                    const rows = document.querySelectorAll('#records-table tbody tr');
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Login animation
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', function(e) {
+                const submitBtn = this.querySelector('button[type="submit"]');
+                submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Entrando...';
+            });
+        }
+        
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const rows = document.querySelectorAll('#records-table tbody tr');
+                
+                rows.forEach(row => {
+                    const chave = row.cells[1].textContent.toLowerCase();
+                    const hwid = row.cells[3].textContent.toLowerCase();
                     
-                    rows.forEach(row => {
-                        const chave = row.cells[1].textContent.toLowerCase();
-                        const hwid = row.cells[3].textContent.toLowerCase();
-                        
-                        if (chave.includes(searchTerm) || hwid.includes(searchTerm)) {
-                            row.style.display = '';
-                        } else {
-                            row.style.display = 'none';
-                        }
-                    });
-                });
-            }
-            
-            // Pagination
-            const table = document.getElementById('records-table');
-            if (table) {
-                const rowsPerPage = 5;
-                const rows = table.querySelectorAll('tbody tr');
-                const pageCount = Math.ceil(rows.length / rowsPerPage);
-                let currentPage = 1;
-                
-                function showPage(page) {
-                    const start = (page - 1) * rowsPerPage;
-                    const end = start + rowsPerPage;
-                    
-                    rows.forEach((row, index) => {
-                        row.style.display = (index >= start && index < end) ? '' : 'none';
-                    });
-                }
-                
-                showPage(currentPage);
-                
-                document.getElementById('prevPage').addEventListener('click', function() {
-                    if (currentPage > 1) {
-                        currentPage--;
-                        showPage(currentPage);
+                    if (chave.includes(searchTerm) || hwid.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
                     }
-                });
-                
-                document.getElementById('nextPage').addEventListener('click', function() {
-                    if (currentPage < pageCount) {
-                        currentPage++;
-                        showPage(currentPage);
-                    }
-                });
-            }
-            
-            // Form submissions with toast notification
-            const authForms = document.querySelectorAll('.auth-form');
-            authForms.forEach(form => {
-                form.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    const submitBtn = this.querySelector('button[type="submit"]');
-                    const originalHTML = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
-                    submitBtn.disabled = true;
-                    
-                    setTimeout(() => {
-                        this.submit();
-                        showToast('Autorização concedida com sucesso!');
-                    }, 500);
                 });
             });
+        }
+        
+        // Pagination
+        const table = document.getElementById('records-table');
+        if (table) {
+            const rowsPerPage = 5;
+            const rows = table.querySelectorAll('tbody tr');
+            const pageCount = Math.ceil(rows.length / rowsPerPage);
+            let currentPage = 1;
             
-            // Toast notification
-            function showToast(message) {
-                const toast = document.getElementById('toast');
-                toast.textContent = message;
-                toast.classList.add('show');
+            function showPage(page) {
+                const start = (page - 1) * rowsPerPage;
+                const end = start + rowsPerPage;
                 
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                }, 3000);
-            }
-            
-            // HWID revoke function (example)
-            window.revokeAuth = function(id) {
-                if (confirm('Tem certeza que deseja revogar esta autorização?')) {
-                    showToast('Autorização revogada com sucesso!');
-                    // Here you would handle the revoke action with your backend
-                }
-            };
-            
-            // Logout button
-            const logoutBtn = document.querySelector('.logout-btn');
-            if (logoutBtn) {
-                logoutBtn.addEventListener('click', function() {
-                    if (confirm('Deseja realmente sair?')) {
-                        window.location.href = "{{ url_for('auth_hwid') }}";  // Changed to use existing route
-                    }
+                rows.forEach((row, index) => {
+                    row.style.display = (index >= start && index < end) ? '' : 'none';
                 });
             }
+            
+            showPage(currentPage);
+            
+            document.getElementById('prevPage').addEventListener('click', function() {
+                if (currentPage > 1) {
+                    currentPage--;
+                    showPage(currentPage);
+                }
+            });
+            
+            document.getElementById('nextPage').addEventListener('click', function() {
+                if (currentPage < pageCount) {
+                    currentPage++;
+                    showPage(currentPage);
+                }
+            });
+        }
+        
+        // Form submissions with toast notification (para formulários de autorização)
+        const authForms = document.querySelectorAll('.auth-form');
+        authForms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalHTML = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+                submitBtn.disabled = true;
+                
+                setTimeout(() => {
+                    this.submit();
+                    showToast('Autorização concedida com sucesso!');
+                }, 500);
+            });
         });
+        
+        // Toast notification
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        
+        // HWID revoke function (exemplo)
+        window.revokeAuth = function(id) {
+            if (confirm('Tem certeza que deseja revogar esta autorização?')) {
+                showToast('Autorização revogada com sucesso!');
+                // Aqui você trataria a revogação via backend
+            }
+        };
+        
+        // Logout button
+        const logoutBtn = document.querySelector('.logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', function() {
+                if (confirm('Deseja realmente sair?')) {
+                    window.location.href = "{{ url_for('auth_hwid') }}";
+                }
+            });
+        }
+        
         // Mostrar/ocultar o formulário de verificação
         const showVerificationBtn = document.getElementById('show-verification');
         const verificationForm = document.getElementById('verification-form');
@@ -1234,7 +1236,7 @@ DARK_TEMPLATE = """
             });
         }
         
-        // Handle verification form submission
+        // Handle verification form submission (para o formulário de verificação de código)
         const codeVerifyForm = document.getElementById('code-verify-form');
         if (codeVerifyForm) {
             codeVerifyForm.addEventListener('submit', function(e) {
@@ -1252,9 +1254,7 @@ DARK_TEMPLATE = """
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Show success with new key
                         showToast(`Nova chave gerada: ${data.new_key}`);
-                        // Change form to display result
                         this.innerHTML = `
                             <div class="input-group">
                                 <h3>Transferência concluída!</h3>
@@ -1282,34 +1282,8 @@ DARK_TEMPLATE = """
                 });
             });
         }
-        document.getElementById('verification-form').addEventListener('submit', function(e) {
-            e.preventDefault(); // Impede o envio padrão do formulário
-            
-            // Cria um objeto com os dados do formulário
-            const formData = new FormData(this);
-            const data = {};
-            formData.forEach((value, key) => {
-                data[key] = value;
-            });
-        
-            // Envia os dados via fetch como JSON
-            fetch('/request-key-transfer', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(result => {
-                console.log(result);
-                // Aqui você pode tratar a resposta, exibir mensagens etc.
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-            });
-        });
-    </script>
+    });
+</script>
 </body>
 </html>
 """
