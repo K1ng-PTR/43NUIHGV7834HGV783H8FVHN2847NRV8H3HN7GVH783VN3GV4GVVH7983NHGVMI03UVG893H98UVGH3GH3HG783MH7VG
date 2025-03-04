@@ -1017,7 +1017,7 @@ DARK_TEMPLATE = """
                 <i class="fas fa-arrow-left"></i> Voltar
             </button>
         </div>
-        {% endif %}
+        
         <div class="header">
             <button class="logout-btn">
                 <i class="fas fa-sign-out-alt"></i> Sair
@@ -1095,6 +1095,22 @@ DARK_TEMPLATE = """
             <button id="prevPage"><i class="fas fa-chevron-left"></i> Anterior</button>
             <button id="nextPage">Próximo <i class="fas fa-chevron-right"></i></button>
         </div>
+        {% else %}
+        <!-- Login form section -->
+        <div class="header">
+            <h1>Administração</h1>
+            <p>Faça login para acessar o painel</p>
+        </div>
+        <form id="login-form" method="post" action="{{ url_for('auth_hwid_login') }}">
+            <div class="input-group">
+                <i class="fas fa-lock"></i>
+                <input type="password" name="password" placeholder="Senha de administrador" required>
+            </div>
+            <button type="submit">
+                <i class="fas fa-sign-in-alt"></i>
+                Entrar
+            </button>
+        </form>
         {% endif %}
     </div>
     
