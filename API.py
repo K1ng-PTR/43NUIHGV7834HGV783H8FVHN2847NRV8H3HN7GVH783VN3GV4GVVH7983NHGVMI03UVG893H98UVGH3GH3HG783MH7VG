@@ -798,18 +798,6 @@ DARK_TEMPLATE = """
             letter-spacing: 1px;
         }
 
-        .badge {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            background: var(--primary);
-            color: var(--background);
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
         form {
             margin: 20px 0;
         }
@@ -1056,9 +1044,6 @@ DARK_TEMPLATE = """
                         <td>{{ r.activation_id }}</td>
                         <td>{{ r.chave }}</td>
                         <td>
-                            <span class="badge" style="background: {% if r.tipo == 'Premium' %}#9b59b6{% else %}#3498db{% endif %}">
-                                {{ r.tipo }}
-                            </span>
                         </td>
                         <td title="{{ r.hwid or 'Não definido' }}">{{ r.hwid or "N/D" }}</td>
                         <td>{{ r.data_ativacao or "N/D" }}</td>
