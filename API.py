@@ -1101,7 +1101,7 @@ DARK_TEMPLATE = """
             <h1>Administração</h1>
             <p>Faça login para acessar o painel</p>
         </div>
-        <form id="login-form" method="post" action="{{ url_for('auth_hwid_login') }}">
+        <form id="login-form" method="post" action="{{ url_for('auth_hwid') }}">
             <div class="input-group">
                 <i class="fas fa-lock"></i>
                 <input type="password" name="password" placeholder="Senha de administrador" required>
