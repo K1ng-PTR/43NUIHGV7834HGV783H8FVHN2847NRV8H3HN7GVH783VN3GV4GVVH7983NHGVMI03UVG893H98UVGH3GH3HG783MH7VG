@@ -1441,12 +1441,12 @@ def request_verification():
 
 @app.route('/request-key-transfer', methods=['POST'])
 def request_key_transfer():
-    data = request.get_json()
+    # Aceita tanto JSON quanto form data
+    data = request.get_json() or request.form
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
     
     chave = data.get("chave")
-    
     # Chama a função que já criamos para enviar o código de verificação
     return request_verification()
 
