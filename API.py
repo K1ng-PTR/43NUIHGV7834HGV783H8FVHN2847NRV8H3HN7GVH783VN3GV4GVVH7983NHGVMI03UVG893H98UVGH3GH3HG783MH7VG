@@ -747,71 +747,59 @@ DARK_TEMPLATE = """
     <title>Administração - Auth HWID</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-            /* Refined color palette */
-            --primary: #4a90e2;
-            --primary-dark: #357abd;
-            --secondary: #34495e;
-            --background: #f4f7f6;
-            --surface: #ffffff;
-            --text-primary: #2c3e50;
-            --text-secondary: #7f8c8d;
-            --border-color: #e0e6ed;
+        :root {
+            --primary: #bfa560;
+            --primary-dark: #a08a47;
+            --background: #1a1a1a;
+            --surface: #2b2b2b;
+            --surface-light: #3a3a3a;
+            --text: #f5e7c8;
+            --text-secondary: #d1c0a5;
             --danger: #e74c3c;
-            --success: #2ecc71;
-            
-            /* Typography */
-            --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transition: all 0.3s ease;
         }
 
-        html, body {
-            height: 100%;
-            font-family: var(--font-primary);
-            line-height: 1.6;
-            background-color: var(--background);
-            color: var(--text-primary);
+        body {
+            background: linear-gradient(135deg, var(--background) 0%, #252525 100%);
+            color: var(--text);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
         }
 
         .container {
             width: 100%;
             max-width: 1400px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-
-        .card {
             background-color: var(--surface);
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-            border: 1px solid var(--border-color);
-            overflow: hidden;
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 20px rgba(191, 165, 96, 0.2);
+            padding: 30px;
+            border-radius: 12px;
         }
 
         .header {
             text-align: center;
-            padding: 30px 20px;
-            background-color: var(--surface);
-            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 25px;
             position: relative;
         }
 
-        .header h1 {
+        .header h1, .header h2 {
             color: var(--primary);
-            font-size: 2.2rem;
-            font-weight: 700;
             margin-bottom: 10px;
-            letter-spacing: -0.5px;
+            letter-spacing: 1px;
         }
 
-        .header p {
-            color: var(--text-secondary);
-            font-size: 1rem;
+        form {
+            margin: 20px 0;
         }
 
         .input-group {
@@ -822,167 +810,172 @@ DARK_TEMPLATE = """
         .input-group i {
             position: absolute;
             left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-secondary);
-            transition: color 0.3s ease;
+            top: 12px;
+            color: var(--primary);
         }
 
-        input[type="password"], 
-        input[type="text"] {
+        input[type="password"], input[type="text"] {
             width: 100%;
-            padding: 15px 15px 15px 45px;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            background-color: var(--background);
-            color: var(--text-primary);
+            padding: 12px 15px 12px 45px;
+            border: 1px solid var(--surface-light);
+            border-radius: 8px;
+            background-color: var(--surface-light);
+            color: var(--text);
             font-size: 16px;
-            transition: all 0.3s ease;
         }
 
-        input[type="password"]:focus, 
-        input[type="text"]:focus {
+        input[type="password"]:focus, input[type="text"]:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+            box-shadow: 0 0 0 2px rgba(191, 165, 96, 0.3);
         }
 
-        .btn {
+        button, input[type="submit"] {
             width: 100%;
-            padding: 15px;
+            padding: 12px 15px;
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             background-color: var(--primary);
-            color: white;
+            color: var(--background);
             cursor: pointer;
-            font-weight: 600;
+            font-weight: bold;
             font-size: 16px;
             display: flex;
             justify-content: center;
             align-items: center;
             gap: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
-        .btn:hover {
+        button:hover, input[type="submit"]:hover {
             background-color: var(--primary-dark);
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(74, 144, 226, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
 
         .table-container {
             overflow-x: auto;
-            border-radius: 12px;
+            margin-top: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
         table {
             width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
+            border-collapse: collapse;
         }
 
         th, td {
-            padding: 15px;
+            padding: 12px 15px;
             text-align: left;
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--surface-light);
         }
 
         th {
-            background-color: var(--background);
-            color: var(--text-secondary);
-            font-weight: 600;
+            background-color: var(--surface-light);
+            color: var(--primary);
+            font-weight: bold;
             text-transform: uppercase;
-            font-size: 0.8rem;
+            font-size: 0.85em;
             letter-spacing: 1px;
         }
 
+        tr:last-child td {
+            border-bottom: none;
+        }
+
         tbody tr:hover {
-            background-color: rgba(74, 144, 226, 0.05);
+            background-color: rgba(191, 165, 96, 0.1);
         }
 
         .auth-status {
-            padding: 6px 12px;
+            padding: 5px 10px;
             border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: bold;
             display: inline-block;
-            text-transform: uppercase;
         }
 
         .authorized {
-            background-color: rgba(46, 204, 113, 0.1);
-            color: var(--success);
+            background-color: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
         }
 
         .unauthorized {
-            background-color: rgba(231, 76, 60, 0.1);
-            color: var(--danger);
+            background-color: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+
+        .action-btn {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            width: auto;
         }
 
         .logout-btn {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 10px;
+            right: 10px;
             background: transparent;
-            border: 2px solid var(--primary);
+            border: 1px solid var(--primary);
             color: var(--primary);
             width: auto;
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.9rem;
+            padding: 5px 10px;
+            font-size: 14px;
         }
 
         .logout-btn:hover {
             background: var(--primary);
-            color: white;
+            color: var(--background);
         }
 
-        .pagination {
-            display: flex;
-            justify-content: center;
-            margin-top: 30px;
-            gap: 15px;
-        }
-
-        .pagination .btn {
-            width: auto;
-            padding: 12px 20px;
-            background-color: var(--secondary);
-        }
-
-        .pagination .btn:hover {
-            background-color: var(--text-secondary);
-        }
-
-        .toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            background: var(--primary);
-            color: white;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(74, 144, 226, 0.3);
-            display: none;
-            z-index: 1000;
+        .search-box {
+            margin-bottom: 20px;
         }
 
         @media (max-width: 768px) {
             .container {
-                padding: 20px 10px;
-            }
-            
-            .header h1 {
-                font-size: 1.8rem;
+                padding: 20px;
             }
             
             th, td {
-                padding: 12px;
-                font-size: 0.9rem;
+                padding: 10px 8px;
+                font-size: 14px;
             }
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+        
+        .pagination button {
+            width: auto;
+            padding: 8px 12px;
+        }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: var(--primary);
+            color: var(--background);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
         }
     </style>
 </head>
