@@ -2224,54 +2224,54 @@ def auth_hwid_authorize():
 @app.route('/auth-hwid/verify-code', methods=['POST'], endpoint='verify_code_auth')
 def verify_code():
     data = request.form if request.form else request.json
-    
+
     admin_pass = data.get("password")
     if admin_pass != ADMIN_PASSWORD:
         return jsonify({"error": "Acesso não autorizado"}), 401
-    
+
     chave = data.get("chave")
     code = data.get("verification_code")
-    
+
     if not chave or not code:
         return jsonify({"error": "Chave e código de verificação são obrigatórios."}), 400
-    
+
     try:
         # Busca o registro da chave
         res = supabase.table("activations").select("*").eq("chave", chave).execute()
-        
+
         if not res.data:
             return jsonify({"error": "Chave não encontrada."}), 404
-        
+
         registro = res.data[0]
         stored_code = registro.get("verification_code")
         expires_at = registro.get("verification_code_expires")
-        
+
         if not stored_code:
             return jsonify({"error": "Nenhum código de verificação foi solicitado para esta chave."}), 400
-        
+
         # Verifica se o código expirou
         if expires_at:
             expiry_time = datetime.datetime.fromisoformat(expires_at)
             if datetime.datetime.now() > expiry_time:
                 return jsonify({"error": "O código de verificação expirou. Solicite um novo código."}), 400
-        
+
         # Verifica se o código está correto
         if code != stored_code:
             return jsonify({"error": "Código de verificação inválido."}), 400
-        
+
         # Código válido - Revoga a chave antiga e cria uma nova
         activation_id_old = registro.get("activation_id")
-        
+
         # Marca o registro antigo como revogado
         revoke_update = {"revoked": True}
         supabase.table("activations").update(revoke_update).eq("activation_id", activation_id_old).execute()
-        
+
         # Gera nova chave do mesmo tipo da antiga
         tipo_original = registro.get("tipo")
         new_key = generate_key()
         new_activation_id = generate_activation_id("", new_key)
         email = registro.get("email")
-        
+
         new_record = {
             "hwid": "",  # Ainda não vinculado
             "chave": new_key,
@@ -2281,28 +2281,22 @@ def verify_code():
             "revoked": False,  # Nova licença válida
             "email": email  # Mantém o mesmo email
         }
-        
+
         insert_res = supabase.table("activations").insert(new_record).execute()
-        
+
         if not insert_res.data:
             return jsonify({"error": "Erro ao gerar nova chave."}), 500
-        
+
         # Limpa o código de verificação usado
         clear_code = {
             "verification_code": None,
             "verification_code_expires": None
         }
         supabase.table("activations").update(clear_code).eq("chave", chave).execute()
-        
-        # Retorna a nova chave
-        return jsonify({
-            "success": True,
-            "message": "Verificação bem-sucedida. Uma nova chave foi gerada.",
-            "old_key": chave,
-            "new_key": new_key,
-            "tipo": tipo_original
-        }), 200
-        
+
+        # Redireciona para o endpoint /auth-hwid/authorize passando a nova chave e o email registrado
+        return redirect(url_for('auth_hwid_authorize', new_key=new_key, email=email))
+
     except Exception as e:
         return jsonify({"error": "Erro ao processar a verificação", "details": str(e)}), 500
 
