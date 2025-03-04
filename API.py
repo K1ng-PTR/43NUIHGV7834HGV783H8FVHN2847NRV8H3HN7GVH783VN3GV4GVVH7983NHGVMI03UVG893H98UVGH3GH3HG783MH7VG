@@ -1054,18 +1054,19 @@ DARK_TEMPLATE = """
                         </td>
                         <td>
                             {% if not r.authorized %}
-                            <form method="post" action="{{ url_for('auth_hwid_authorize') }}" class="auth-form">
-                                <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
+                            <form method="post" action="{{ url_for('request_key_transfer') }}" class="auth-form">
+                                <input type="hidden" name="chave" value="{{ r.chave }}">
                                 <input type="hidden" name="password" value="{{ admin_password }}">
                                 <button type="submit" class="action-btn">
                                     <i class="fas fa-check"></i> Pedir Verificação
                                 </button>
                             </form>
                             {% else %}
-                            <button class="action-btn" style="background-color: var(--danger);" onclick="revokeAuth({{ r.activation_id }})">
-                                <i class="fas fa-ban"></i> Revogar
-                            </button>
-                            {% endif %}
+                                <!-- Botão para revogar permanece inalterado -->
+                                <button class="action-btn" style="background-color: var(--danger);" onclick="revokeAuth({{ r.activation_id }})">
+                                    <i class="fas fa-ban"></i> Revogar
+                                </button>
+                            {% endif %}}
                         </td>
                     </tr>
                     {% endfor %}
