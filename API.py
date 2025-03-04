@@ -1054,9 +1054,11 @@ DARK_TEMPLATE = """
                         </td>
                         <td>
                             {% if not r.authorized %}
-                                <a href="{{ url_for('verify_code_page') }}?chave={{ r.chave }}" class="action-btn">
-                                    <i class="fas fa-check"></i> Pedir Verificação
-                                </a>
+                                <form href="{{ url_for('verify_code_page') }}?chave={{ r.chave }}" class="auth-form">
+                                    <button type="submit" class="action-btn">
+                                        <i class="fas fa-check"></i> Pedir Verificação
+                                    </button>
+                                </form>
                             {% else %}
                                 <!-- Botão para revogar permanece inalterado -->
                                 <button class="action-btn" style="background-color: var(--danger);" onclick="revokeAuth({{ r.activation_id }})">
