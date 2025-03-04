@@ -774,6 +774,7 @@ DARK_TEMPLATE = """
             justify-content: center;
             align-items: center;
             padding: 20px;
+            overflow-x: hidden; /* Prevenir scroll horizontal */
         }
 
         .container {
@@ -784,6 +785,7 @@ DARK_TEMPLATE = """
             box-shadow: 0 0 20px rgba(191, 165, 96, 0.2);
             padding: 30px;
             border-radius: 12px;
+            overflow-x: hidden; /* Prevenir scroll horizontal dentro do container */
         }
 
         .header {
@@ -874,12 +876,16 @@ DARK_TEMPLATE = """
         table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed; /* Prevenir que a tabela expanda além do container */
         }
 
         th, td {
             padding: 12px 15px;
             text-align: left;
             border-bottom: 1px solid var(--surface-light);
+            word-break: break-word; /* Permitir quebra de palavras longas */
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         th {
@@ -1076,7 +1082,7 @@ DARK_TEMPLATE = """
                                 <input type="hidden" name="activation_id" value="{{ r.activation_id }}">
                                 <input type="hidden" name="password" value="{{ admin_password }}">
                                 <button type="submit" class="action-btn">
-                                    <i class="fas fa-check"></i> Autorizar
+                                    <i class="fas fa-check"></i> Pedir Verificação
                                 </button>
                             </form>
                             {% else %}
@@ -1193,7 +1199,7 @@ DARK_TEMPLATE = """
                     
                     setTimeout(() => {
                         this.submit();
-                        showToast('Autorização concedida com sucesso!');
+                        showToast('Pedido de verificação enviado com sucesso!');
                     }, 500);
                 });
             });
