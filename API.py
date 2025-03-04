@@ -1054,7 +1054,7 @@ DARK_TEMPLATE = """
                         </td>
                         <td>
                             {% if not r.authorized %}
-                                <form method="post" action="{{ url_for('verify_code_page') }}" class="auth-form">
+                                <form method="post" action="{{ url_for('verify_code') }}" class="auth-form">
                                     <input type="hidden" name="chave" value="{{ r.chave }}">
                                     <button type="submit" class="action-btn">
                                         <i class="fas fa-check"></i> Pedir Verificação
