@@ -1362,7 +1362,8 @@ def generate_verification_code():
 
 @app.route('/request-verification', methods=['POST'])
 def request_verification():
-    data = request.get_json()
+    # Suporta tanto JSON quanto form-data
+    data = request.get_json() or request.form
     if not data or 'chave' not in data:
         return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
     
