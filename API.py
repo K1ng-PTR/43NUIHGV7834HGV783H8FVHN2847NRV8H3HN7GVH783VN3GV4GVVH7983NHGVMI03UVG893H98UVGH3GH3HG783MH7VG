@@ -774,18 +774,16 @@ DARK_TEMPLATE = """
             justify-content: center;
             align-items: center;
             padding: 20px;
-            overflow-x: hidden; /* Prevenir scroll horizontal */
         }
 
         .container {
             width: 100%;
-            max-width: 800px;
+            max-width: 1400px;
             background-color: var(--surface);
             border: 2px solid var(--primary);
             box-shadow: 0 0 20px rgba(191, 165, 96, 0.2);
             padding: 30px;
             border-radius: 12px;
-            overflow-x: hidden; /* Prevenir scroll horizontal dentro do container */
         }
 
         .header {
@@ -876,16 +874,12 @@ DARK_TEMPLATE = """
         table {
             width: 100%;
             border-collapse: collapse;
-            table-layout: fixed; /* Prevenir que a tabela expanda além do container */
         }
 
         th, td {
             padding: 12px 15px;
             text-align: left;
             border-bottom: 1px solid var(--surface-light);
-            word-break: break-word; /* Permitir quebra de palavras longas */
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         th {
@@ -1050,7 +1044,6 @@ DARK_TEMPLATE = """
                     <tr>
                         <th>ID</th>
                         <th>Chave</th>
-                        <th>Tipo</th>
                         <th>HWID</th>
                         <th>Data Ativação</th>
                         <th>Status</th>
@@ -1199,7 +1192,7 @@ DARK_TEMPLATE = """
                     
                     setTimeout(() => {
                         this.submit();
-                        showToast('Pedido de verificação enviado com sucesso!');
+                        showToast('Autorização concedida com sucesso!');
                     }, 500);
                 });
             });
