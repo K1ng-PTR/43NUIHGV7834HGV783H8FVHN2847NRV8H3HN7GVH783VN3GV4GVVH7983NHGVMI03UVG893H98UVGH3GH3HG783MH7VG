@@ -419,6 +419,9 @@ def stripe_webhook():
         # Define o tipo conforme sua lógica
         tipo = "Uso Único" if checkout_link == "https://buy.stripe.com/14k7tX60H3QE6kg14b" else "LifeTime"
         
+        # Obtém o email do cliente
+        customer_email = session.get("customer_details", {}).get("email", "")
+        
         # Removida a definição de data_ativacao aqui
         chave = generate_key()
         activation_id = generate_activation_id("", chave)
@@ -427,7 +430,8 @@ def stripe_webhook():
             "chave": chave,
             "activation_id": activation_id,
             "data_ativacao": None,  # Definido como None em vez de now_dt
-            "tipo": tipo
+            "tipo": tipo,
+            "email": customer_email  # Salvando o email do cliente
         }
         try:
             res = supabase.table("activations").insert(registro).execute()
@@ -989,24 +993,31 @@ DARK_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        {% if not authenticated %}
-        <div id="login-box">
+        {% if authenticated %}
+        <div id="verification-form" class="hidden">
             <div class="header">
-                <h2>Administração Auth HWID</h2>
-                <div class="badge">Secure Access</div>
+                <h2>Verificação de Código para Transferência</h2>
             </div>
-            <form method="post" action="{{ url_for('auth_hwid') }}" id="login-form">
+            <form method="post" action="{{ url_for('verify_code') }}" id="code-verify-form">
+                <input type="hidden" name="password" value="{{ admin_password }}">
+                <div class="input-group">
+                    <i class="fas fa-key"></i>
+                    <input type="text" name="chave" placeholder="Chave de ativação" required>
+                </div>
                 <div class="input-group">
                     <i class="fas fa-lock"></i>
-                    <input type="password" name="password" id="password" placeholder="Senha de Admin" required>
+                    <input type="text" name="verification_code" placeholder="Código de verificação" required>
                 </div>
                 <button type="submit">
-                    <i class="fas fa-sign-in-alt"></i>
-                    Entrar
+                    <i class="fas fa-check-circle"></i>
+                    Verificar e Transferir
                 </button>
             </form>
+            <button id="back-to-main" class="action-btn" style="margin-top: 10px;">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </button>
         </div>
-        {% else %}
+        {% endif %}
         <div class="header">
             <button class="logout-btn">
                 <i class="fas fa-sign-out-alt"></i> Sair
@@ -1016,6 +1027,11 @@ DARK_TEMPLATE = """
         </div>
         
         <div class="search-box">
+        <div class="action-buttons" style="margin-bottom: 20px;">
+            <button id="show-verification" class="action-btn" style="background-color: #2980b9;">
+                <i class="fas fa-exchange-alt"></i> Verificar Código para Transferência
+            </button>
+        </div>
             <div class="input-group">
                 <i class="fas fa-search"></i>
                 <input type="text" id="searchInput" placeholder="Buscar por chave ou HWID...">
@@ -1195,6 +1211,80 @@ DARK_TEMPLATE = """
                 });
             }
         });
+        // Mostrar/ocultar o formulário de verificação
+        const showVerificationBtn = document.getElementById('show-verification');
+        const verificationForm = document.getElementById('verification-form');
+        const mainContent = document.querySelector('.table-container');
+        const searchBox = document.querySelector('.search-box');
+        const actionButtons = document.querySelector('.action-buttons');
+        const pagination = document.querySelector('.pagination');
+        
+        if (showVerificationBtn && verificationForm) {
+            showVerificationBtn.addEventListener('click', function() {
+                verificationForm.classList.remove('hidden');
+                mainContent.classList.add('hidden');
+                searchBox.classList.add('hidden');
+                actionButtons.classList.add('hidden');
+                pagination.classList.add('hidden');
+            });
+        
+            document.getElementById('back-to-main').addEventListener('click', function() {
+                verificationForm.classList.add('hidden');
+                mainContent.classList.remove('hidden');
+                searchBox.classList.remove('hidden');
+                actionButtons.classList.remove('hidden');
+                pagination.classList.remove('hidden');
+            });
+        }
+        
+        // Handle verification form submission
+        const codeVerifyForm = document.getElementById('code-verify-form');
+        if (codeVerifyForm) {
+            codeVerifyForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalHTML = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verificando...';
+                submitBtn.disabled = true;
+                
+                const formData = new FormData(this);
+                fetch('{{ url_for("verify_code") }}', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success with new key
+                        showToast(`Nova chave gerada: ${data.new_key}`);
+                        // Change form to display result
+                        this.innerHTML = `
+                            <div class="input-group">
+                                <h3>Transferência concluída!</h3>
+                                <p>Chave antiga: <strong>${data.old_key}</strong></p>
+                                <p>Nova chave: <strong>${data.new_key}</strong></p>
+                                <p>Tipo: ${data.tipo}</p>
+                            </div>
+                            <button type="button" id="reset-form" class="action-btn">
+                                <i class="fas fa-redo"></i> Nova Verificação
+                            </button>
+                        `;
+                        document.getElementById('reset-form').addEventListener('click', function() {
+                            window.location.reload();
+                        });
+                    } else {
+                        showToast(`Erro: ${data.error}`);
+                        submitBtn.innerHTML = originalHTML;
+                        submitBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    showToast('Erro ao processar a solicitação.');
+                    submitBtn.innerHTML = originalHTML;
+                    submitBtn.disabled = false;
+                });
+            });
+        }
     </script>
 </body>
 </html>
@@ -1663,6 +1753,174 @@ def auth_hwid_authorize():
     </html>
     """
     return response_html, 200
+
+def generate_verification_code():
+    """Gera um código de verificação de 6 dígitos."""
+    return ''.join(random.choices(string.digits, k=6))
+
+@app.route('/request-verification', methods=['POST'])
+def request_verification():
+    data = request.get_json()
+    if not data or 'chave' not in data:
+        return jsonify({"error": "O campo 'chave' é obrigatório."}), 400
+    
+    chave = data.get("chave")
+    
+    try:
+        # Busca o registro da chave
+        res = supabase.table("activations").select("*").eq("chave", chave).execute()
+        
+        if not res.data:
+            return jsonify({"error": "Chave não encontrada."}), 404
+        
+        registro = res.data[0]
+        email = registro.get("email")
+        
+        if not email:
+            return jsonify({"error": "Não há email registrado para esta chave."}), 400
+        
+        # Gera o código de verificação
+        verification_code = generate_verification_code()
+        
+        # Define a validade do código (24 horas)
+        expires_at = (datetime.datetime.now() + datetime.timedelta(hours=24)).isoformat()
+        
+        # Atualiza o registro com o código de verificação
+        update_data = {
+            "verification_code": verification_code,
+            "verification_code_expires": expires_at
+        }
+        
+        supabase.table("activations").update(update_data).eq("chave", chave).execute()
+        
+        # Envia o email com o código de verificação
+        subject = "Código de Verificação para Transferência de Chave"
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px;">Código de Verificação</h2>
+            <p>Olá,</p>
+            <p>Recebemos uma solicitação para transferência da sua chave de licença. Para continuar com o processo, forneça o código abaixo ao suporte:</p>
+            <div style="background-color: #f8f9fa; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0; font-size: 18px; text-align: center; letter-spacing: 5px; font-weight: bold;">
+                {verification_code}
+            </div>
+            <p>Este código é válido por 24 horas. Se você não solicitou esta transferência, por favor, ignore este email.</p>
+            <p>Atenciosamente,<br>Equipe de Suporte</p>
+        </body>
+        </html>
+        """
+        
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_FROM
+        msg['To'] = email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        try:
+            server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASSWORD)
+            server.send_message(msg)
+            server.quit()
+            
+            return jsonify({
+                "success": True, 
+                "message": f"Código de verificação enviado para {email}"
+            }), 200
+        except Exception as e:
+            print(f"Erro ao enviar email: {str(e)}")
+            return jsonify({
+                "error": "Falha ao enviar o código de verificação por email.",
+                "details": str(e)
+            }), 500
+            
+    except Exception as e:
+        return jsonify({"error": "Erro ao processar a solicitação", "details": str(e)}), 500
+
+@app.route('/auth-hwid/verify-code', methods=['POST'])
+def verify_code():
+    data = request.form if request.form else request.json
+    
+    admin_pass = data.get("password")
+    if admin_pass != ADMIN_PASSWORD:
+        return jsonify({"error": "Acesso não autorizado"}), 401
+    
+    chave = data.get("chave")
+    code = data.get("verification_code")
+    
+    if not chave or not code:
+        return jsonify({"error": "Chave e código de verificação são obrigatórios."}), 400
+    
+    try:
+        # Busca o registro da chave
+        res = supabase.table("activations").select("*").eq("chave", chave).execute()
+        
+        if not res.data:
+            return jsonify({"error": "Chave não encontrada."}), 404
+        
+        registro = res.data[0]
+        stored_code = registro.get("verification_code")
+        expires_at = registro.get("verification_code_expires")
+        
+        if not stored_code:
+            return jsonify({"error": "Nenhum código de verificação foi solicitado para esta chave."}), 400
+        
+        # Verifica se o código expirou
+        if expires_at:
+            expiry_time = datetime.datetime.fromisoformat(expires_at)
+            if datetime.datetime.now() > expiry_time:
+                return jsonify({"error": "O código de verificação expirou. Solicite um novo código."}), 400
+        
+        # Verifica se o código está correto
+        if code != stored_code:
+            return jsonify({"error": "Código de verificação inválido."}), 400
+        
+        # Código válido - Revoga a chave antiga e cria uma nova
+        activation_id_old = registro.get("activation_id")
+        
+        # Marca o registro antigo como revogado
+        revoke_update = {"revoked": True}
+        supabase.table("activations").update(revoke_update).eq("activation_id", activation_id_old).execute()
+        
+        # Gera nova chave do mesmo tipo da antiga
+        tipo_original = registro.get("tipo")
+        new_key = generate_key()
+        new_activation_id = generate_activation_id("", new_key)
+        email = registro.get("email")
+        
+        new_record = {
+            "hwid": "",  # Ainda não vinculado
+            "chave": new_key,
+            "activation_id": new_activation_id,
+            "data_ativacao": None,  # Sem ativação ainda
+            "tipo": tipo_original,
+            "revoked": False,  # Nova licença válida
+            "email": email  # Mantém o mesmo email
+        }
+        
+        insert_res = supabase.table("activations").insert(new_record).execute()
+        
+        if not insert_res.data:
+            return jsonify({"error": "Erro ao gerar nova chave."}), 500
+        
+        # Limpa o código de verificação usado
+        clear_code = {
+            "verification_code": None,
+            "verification_code_expires": None
+        }
+        supabase.table("activations").update(clear_code).eq("chave", chave).execute()
+        
+        # Retorna a nova chave
+        return jsonify({
+            "success": True,
+            "message": "Verificação bem-sucedida. Uma nova chave foi gerada.",
+            "old_key": chave,
+            "new_key": new_key,
+            "tipo": tipo_original
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": "Erro ao processar a verificação", "details": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0")
