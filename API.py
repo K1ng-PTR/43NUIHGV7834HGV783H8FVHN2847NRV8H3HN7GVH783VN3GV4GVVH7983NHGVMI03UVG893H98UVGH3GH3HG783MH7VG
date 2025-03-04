@@ -1054,13 +1054,9 @@ DARK_TEMPLATE = """
                         </td>
                         <td>
                             {% if not r.authorized %}
-                            <form method="post" action="{{ url_for('request_key_transfer') }}" class="auth-form">
-                                <input type="hidden" name="chave" value="{{ r.chave }}">
-                                <input type="hidden" name="password" value="{{ admin_password }}">
-                                <button type="submit" class="action-btn">
+                                <a href="{{ url_for('verify_code_page') }}?chave={{ r.chave }}" class="action-btn">
                                     <i class="fas fa-check"></i> Pedir Verificação
-                                </button>
-                            </form>
+                                </a>
                             {% else %}
                                 <!-- Botão para revogar permanece inalterado -->
                                 <button class="action-btn" style="background-color: var(--danger);" onclick="revokeAuth({{ r.activation_id }})">
@@ -1476,6 +1472,376 @@ def process_verification_request(data):
             "error": "Falha ao enviar o código de verificação por email.",
             "details": str(e)
         }), 500
+
+from flask import Flask, request, jsonify, render_template_string
+# ... (outras importações e configurações já existentes)
+
+# Template HTML para a página de solicitação de verificação
+verify_code_html = """
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitação de Verificação</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #5e35b1;
+            --primary-light: #7e57c2;
+            --primary-dark: #4527a0;
+            --accent: #ffab40;
+            --text-light: #ffffff;
+            --text-dark: #212121;
+            --background: #121212;
+            --surface: #1e1e1e;
+            --surface-light: #2d2d2d;
+            --error: #cf6679;
+            --success: #4caf50;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--text-light);
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(94, 53, 177, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 30%, rgba(94, 53, 177, 0.07) 0%, transparent 20%),
+                radial-gradient(circle at 50% 80%, rgba(94, 53, 177, 0.05) 0%, transparent 20%);
+        }
+
+        .container {
+            background-color: var(--surface);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 480px;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            padding: 30px 25px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: var(--surface);
+            border-radius: 50% 50% 0 0;
+            z-index: 1;
+        }
+
+        .header h1 {
+            color: var(--text-light);
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .form-container {
+            padding: 30px 25px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 16px 16px 16px 45px;
+            border: 2px solid var(--surface-light);
+            border-radius: 12px;
+            background-color: var(--surface-light);
+            color: var(--text-light);
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px rgba(126, 87, 194, 0.3);
+        }
+
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: var(--text-light);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(94, 53, 177, 0.35);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(94, 53, 177, 0.4);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(94, 53, 177, 0.3);
+        }
+
+        .response {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 12px;
+            font-weight: 500;
+            text-align: center;
+            display: none;
+        }
+
+        .response.success {
+            background-color: rgba(76, 175, 80, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            display: block;
+        }
+
+        .response.error {
+            background-color: rgba(207, 102, 121, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(207, 102, 121, 0.3);
+            display: block;
+        }
+
+        .decoration {
+            position: absolute;
+            z-index: 0;
+        }
+
+        .decoration-1 {
+            top: -50px;
+            right: -50px;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--primary-light), transparent 70%);
+            opacity: 0.1;
+        }
+
+        .decoration-2 {
+            bottom: -80px;
+            left: -80px;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--primary-light), transparent 70%);
+            opacity: 0.08;
+        }
+
+        /* Animação de loading */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--text-light);
+            animation: spin 1s linear infinite;
+        }
+
+        /* Responsividade */
+        @media (max-width: 480px) {
+            .container {
+                width: 95%;
+                border-radius: 12px;
+            }
+
+            .header {
+                padding: 25px 20px;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .form-container {
+                padding: 25px 20px;
+            }
+
+            .form-control {
+                padding: 14px 14px 14px 40px;
+            }
+
+            .btn-submit {
+                padding: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="decoration decoration-1"></div>
+        <div class="decoration decoration-2"></div>
+        
+        <div class="header">
+            <h1>Solicitação de Verificação</h1>
+            <p>Preencha os campos abaixo para confirmar sua identidade</p>
+        </div>
+        
+        <div class="form-container">
+            <form id="verification-form">
+                <!-- Campo hidden com a password (já que o endpoint espera o parâmetro) -->
+                <input type="hidden" name="password" value="{{ admin_password }}">
+                
+                <div class="form-group">
+                    <label for="chave">Chave de Ativação</label>
+                    <div class="input-group">
+                        <i class="fas fa-key"></i>
+                        <input type="text" id="chave" name="chave" class="form-control" value="{{ chave }}" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email da Chave</label>
+                    <div class="input-group">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="email" name="email" class="form-control" placeholder="exemplo@dominio.com" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-submit">
+                    <span>Enviar Verificação</span>
+                    <div class="loading" id="loading-spinner"></div>
+                </button>
+            </form>
+            
+            <div id="response-message" class="response"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('verification-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Mostrar loading
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const submitButton = document.querySelector('.btn-submit span');
+            loadingSpinner.style.display = 'block';
+            submitButton.textContent = 'Processando...';
+            
+            const form = e.target;
+            const data = {
+                chave: form.chave.value,
+                email: form.email.value,
+                password: form.password.value
+            };
+            
+            fetch('/request-key-transfer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                // Esconder loading
+                loadingSpinner.style.display = 'none';
+                submitButton.textContent = 'Enviar Verificação';
+                
+                const msgDiv = document.getElementById('response-message');
+                if (result.success) {
+                    msgDiv.className = 'response success';
+                    msgDiv.innerHTML = '<i class="fas fa-check-circle"></i> ' + (result.message || 'Código de verificação enviado com sucesso!');
+                } else if (result.error) {
+                    msgDiv.className = 'response error';
+                    msgDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + result.error;
+                } else {
+                    msgDiv.className = 'response error';
+                    msgDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Resposta inesperada: ' + JSON.stringify(result);
+                }
+            })
+            .catch(error => {
+                // Esconder loading
+                loadingSpinner.style.display = 'none';
+                submitButton.textContent = 'Enviar Verificação';
+                
+                const msgDiv = document.getElementById('response-message');
+                msgDiv.className = 'response error';
+                msgDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro ao enviar a solicitação.';
+            });
+        });
+    </script>
+</body>
+</html>
+"""
+
+# Novo endpoint que renderiza o template de verificação
+@app.route('/verify-code', methods=['GET'])
+def verify_code_page():
+    # Se desejar pré-preencher a chave, passe-a na query string: /verify-code?chave=XXXXX-XXXXX-XXXXX-XXXXX
+    chave = request.args.get('chave', '')
+    return render_template_string(verify_code_html, admin_password=ADMIN_PASSWORD, chave=chave)
 
 # Endpoint que utiliza a função auxiliar para /request-key-transfer
 @app.route('/request-key-transfer', methods=['POST'])
