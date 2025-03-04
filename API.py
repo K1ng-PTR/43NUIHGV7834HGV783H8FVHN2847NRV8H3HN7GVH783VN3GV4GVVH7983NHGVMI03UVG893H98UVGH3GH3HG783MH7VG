@@ -1442,6 +1442,7 @@ def process_verification_request(data):
 @app.route('/request-key-transfer', methods=['POST'])
 def request_key_transfer():
     data = request.get_json() or request.form
+    print("Dados recebidos:", data)  # Linha de depuração
     return process_verification_request(data)
 
 # Endpoint que utiliza a função auxiliar para /request-verification
